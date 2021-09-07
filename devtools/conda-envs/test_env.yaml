@@ -3,12 +3,14 @@ channels:
 
   - anaconda
   - conda-forge
+  - omnia
   
 dependencies:
     # Base depends
   - python
   - pip
   - openff-toolkit
+  - openmm
 
     # Pip-only installs
   - pip:
