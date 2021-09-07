@@ -1,20 +1,20 @@
 [//]: # (Badges)
-[![GitHub Actions Build Status](https://github.com/MolSSI/mmic_off/workflows/CI/badge.svg)](https://github.com/MolSSI/mmic_off/actions?query=workflow%3ACI)
-[![codecov](https://codecov.io/gh/MolSSI/mmic_off/branch/master/graph/badge.svg)](https://codecov.io/gh/MolSSI/mmic_off/branch/master)
-[![Language grade: Python](https://img.shields.io/lgtm/grade/python/g/MolSSI/mmic_off.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/MolSSI/mmic_off/context:python)
+[![GitHub Actions Build Status](https://github.com/MolSSI/mmic_openff/workflows/CI/badge.svg)](https://github.com/MolSSI/mmic_openff/actions?query=workflow%3ACI)
+[![codecov](https://codecov.io/gh/MolSSI/mmic_openff/branch/master/graph/badge.svg)](https://codecov.io/gh/MolSSI/mmic_openff/branch/master)
+[![Language grade: Python](https://img.shields.io/lgtm/grade/python/g/MolSSI/mmic_openff.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/MolSSI/mmic_openff/context:python)
 
 OpenFF translator for MMSchema
 ==============================
 This is part of the [MolSSI](http://molssi.org) Molecular Mechanics Interoperable Components ([MMIC](https://github.com/MolSSI/mmic)) project. This package provides translators between [MMSchema](https://molssi.github.io/mmschema) and [OpenFF](https://github.com/openforcefield/openff-toolkit) toolkit.
 
-![image](mmic_off/data/imgs/component.png)
+![image](mmic_openff/data/imgs/component.png)
 
 # API
-**mmic_off** provides 2 classes of translators for: molecules and forcefields.
+**mmic_openff** provides 2 classes of translators for: molecules and forcefields.
 
 ## Models
 ```python
-from mmic_off.models import OpenFFMol
+from mmic_openff.models import OpenFFMol
 
 # Convert MMSchema to OpenFF molecule
 off_mol = OpenFFMol.from_schema(mm_mol) -> 
@@ -26,11 +26,11 @@ mm_mol = OpenFFMol.to_schema(off_mol) -> mmelemental.models.Molecule
 One could do similar conversions for the `ForceField` model as well.
 
 ## Components
-The `from_schema` and `to_schema` methods in the `OpenFFMol` model use translation components provided by **mmic_off** and **MMElemental** to convert between MMSchema and OpenFF representations.
+The `from_schema` and `to_schema` methods in the `OpenFFMol` model use translation components provided by **mmic_openff** and **MMElemental** to convert between MMSchema and OpenFF representations.
 
 ```python
-from mmic_off.components import OpenFFToMolComponent, MolToOpenFFComponent
-from mmic_off.models.import OpenFFMol
+from mmic_openff.components import OpenFFToMolComponent, MolToOpenFFComponent
+from mmic_openff.models.import OpenFFMol
 from mmelemental.models import Molecule
 ```
 

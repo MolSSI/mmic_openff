@@ -1,5 +1,5 @@
 """
-mmic_off
+mmic_openff
 A short description of the project.
 """
 import sys
@@ -21,7 +21,7 @@ except Exception:
 
 setup(
     # Self-descriptive entries which should always be present
-    name="mmic_off",
+    name="mmic_openff",
     author="MolSSI",
     author_email="andrewabimansour@vt.edu",
     description=short_description[0],

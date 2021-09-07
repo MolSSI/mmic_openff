@@ -48,4 +48,4 @@ jobs:
 
     - name: Lint
       shell: bash
-      run: black mmic_off --check
+      run: black mmic_openff --check

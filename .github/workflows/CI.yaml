@@ -66,7 +66,7 @@ jobs:
       shell: bash -l {0}
 
       run: |
-        pytest -v --cov=mmic_off --cov-report=xml --color=yes mmic_off/tests/
+        pytest -v --cov=mmic_openff --cov-report=xml --color=yes mmic_openff/tests/
 
     - name: CodeCov
       uses: codecov/codecov-action@v1
