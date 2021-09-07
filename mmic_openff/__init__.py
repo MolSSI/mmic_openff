@@ -8,7 +8,6 @@ from . import components, models
 
 # Handle versioneer
 from ._version import get_versions
-from .mmic_openff import units
 
 versions = get_versions()
 __version__ = versions["version"]
