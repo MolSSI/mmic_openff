@@ -22,4 +22,6 @@ dependencies:
     - git+https://github.com/MolSSI/cmselemental.git@v0.2.0
     - git+https://github.com/MolSSI/mmelemental.git
     - git+https://github.com/MolSSI/mmic_translator.git
+    - git+https://github.com/MolSSI/mmic_parmed.git
     - git+https://github.com/MolSSI/mm_data.git
+    - git+https://github.com/parmed/parmed.git
