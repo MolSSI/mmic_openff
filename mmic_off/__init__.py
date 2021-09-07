@@ -1,5 +1,5 @@
 """
-mmic_off
+mmic_openff
 Tactic MMIC for OpenFF/MMSchema translation.
 """
 
@@ -8,7 +8,7 @@ from . import components, models
 
 # Handle versioneer
 from ._version import get_versions
-from .mmic_off import units
+from .mmic_openff import units
 
 versions = get_versions()
 __version__ = versions["version"]
