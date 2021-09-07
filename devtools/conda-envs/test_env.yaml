@@ -1,0 +1,23 @@
+name: test
+channels:
+
+  - anaconda
+  - conda-forge
+  
+dependencies:
+    # Base depends
+  - python
+  - pip
+  - openff-toolkit
+
+    # Pip-only installs
+  - pip:
+    - mmic>=0.1.0
+    - codecov
+    - pytest
+    - pytest-cov
+    - qcelemental
+    - git+https://github.com/MolSSI/cmselemental.git@v0.2.0
+    - git+https://github.com/MolSSI/mmelemental.git
+    - git+https://github.com/MolSSI/mmic_translator.git
+    - git+https://github.com/MolSSI/mm_data.git
