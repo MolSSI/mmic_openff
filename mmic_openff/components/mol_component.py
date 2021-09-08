@@ -39,7 +39,9 @@ class MolToOpenFFComponent(TransComponent):
         ndim = mmol.ndim
 
         if ndim != 3:
-            raise NotImplementedError("mmic_openff supports only 3D molecules.")
+            raise NotImplementedError(
+                "mmic_openff supports only 3D molecules."
+            )  # need to double check this
 
         mol = OffMolecule()
         mol.name = mmol.name
@@ -54,7 +56,7 @@ class MolToOpenFFComponent(TransComponent):
             atomic_numbers = mmol.atomic_numbers
         else:
             raise NotImplementedError(
-                "mmic_openff is supported only for atomic/molecular systems. Molecule.atomic_numbers must be defined."
+                "mmic_openff supports only atomic/molecular systems. Molecule.atomic_numbers must be defined."  # need to double check this
             )
 
         if isinstance(mmol.extras, dict):
@@ -62,6 +64,7 @@ class MolToOpenFFComponent(TransComponent):
         else:
             extras = {}
 
+        # not yet supported by MMSchema
         fm_charges = extras.get("formal_charges", [0 for _ in range(natoms)])
         aroma = extras.get("is_aromatic", [False for _ in range(natoms)])
 
@@ -121,41 +124,35 @@ class OpenFFToMolComponent(TransComponent):
         if isinstance(inputs, dict):
             inputs = self.input()(**inputs)
 
-        top = inputs.data_object
-        geo = inputs.keywords.get("positions", None)
-        if geo is not None:
-            geo_units = inputs.keywords.get("positions_units", geo.unit.get_name())
+        off_mol = inputs.data_object
+        if off_mol.n_conformers > 1:
+            raise NotImplementedError("Multi-conformers not supported.")
 
-            geo = numpy.array([(pos.x, pos.y, pos.z) for pos in geo]).T.flatten()
+        if off_mol.n_conformers == 1:
+            conformer = off_mol.conformers[0]
+            geo_units = conformer.unit.get_name()
+            geo = conformer._value.flatten()
+        else:
+            geo = None
 
         atomic_data = [
-            (atom.name, atom.element.atomic_number, atom.element.symbol)
-            for atom in top.atoms()
+            (atom.name, atom.atomic_number, atom.mass._value) for atom in off_mol.atoms
         ]
-        names, atomic_nums, element_names = zip(*atomic_data)
+        names, atomic_nums, masses = zip(*atomic_data)
 
-        try:
-            masses = [atom.element.mass._value for atom in top.atoms()]
-            masses_units = next(top.atoms()).element.mass.unit.get_name()
-        except Exception:
-            masses = None
-            masses_units = "dalton"
+        masses_units = off_mol.atoms[0].mass.unit.get_name()
 
-        # If bond order is none, set it to 1.
         connectivity = [
-            (bond.atom1.index, bond.atom2.index, bond.order or 1)
-            for bond in top.bonds()
+            (bond.atom1_index, bond.atom2_index, bond.bond_order)
+            for bond in off_mol.bonds
         ]
-
-        residues = [(atom.residue.name, atom.residue.index) for atom in top.atoms()]
 
         input_dict = {
+            "name": off_mol.name,
             "atomic_numbers": atomic_nums,
-            "symbols": element_names,
             "atom_labels": names,
             "geometry": geo,
             "geometry_units": geo_units,
-            "substructs": residues,
             "connectivity": connectivity,
             "masses": masses,
             "masses_units": masses_units,
