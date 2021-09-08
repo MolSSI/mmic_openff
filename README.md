@@ -9,10 +9,9 @@ This is part of the [MolSSI](http://molssi.org) Molecular Mechanics Interoperabl
 
 ![image](mmic_openff/data/imgs/component.png)
 
-# API
 **mmic_openff** provides 2 classes of translators for: molecules and forcefields.
 
-## Models
+# Models
 ```python
 from mmic_openff.models import OpenFFMol
 
@@ -25,7 +24,7 @@ mm_mol = OpenFFMol.to_schema(off_mol) -> mmelemental.models.Molecule
 ```
 One could do similar conversions for the `ForceField` model as well.
 
-## Components
+# Components
 The `from_schema` and `to_schema` methods in the `OpenFFMol` model use translation components provided by **mmic_openff** and **MMElemental** to convert between MMSchema and OpenFF representations.
 
 ```python
@@ -34,7 +33,7 @@ from mmic_openff.models.import OpenFFMol
 from mmelemental.models import Molecule
 ```
 
-### MMSchema to OpenMM molecule
+## MMSchema to OpenFF molecule
 ```python
 # Create MMSchema molecule
 mm_mol = Molecule.from_file(path_to_file)
@@ -53,7 +52,7 @@ outp = MolToOpenFFComponent.compute(inp)
 mol = outp.data_object.data
 ```
 
-### OpenMM to MMSchema molecule
+## OpenFF to MMSchema molecule
 ```python
 from simtk.openmm import app
 
