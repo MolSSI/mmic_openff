@@ -20,7 +20,6 @@ def test_mmic_openff_imported():
     assert "mmic_openff" in sys.modules
 
 
-@pytest.mark.skip("Skip for now")
 def test_mmic_to_mol_from_sdf(**kwargs):
     sdf_file_path = get_data_file_path("molecules/ethanol.sdf")
 
@@ -28,7 +27,7 @@ def test_mmic_to_mol_from_sdf(**kwargs):
         "data_object": Molecule.from_file(sdf_file_path),
         "keywords": kwargs,
         "schema_version": 1,
-        "schema_name": "my_schema",
+        "schema_name": "mmschema",
     }
 
     return mmic_openff.components.OpenFFToMolComponent.compute(inputs)
@@ -39,7 +38,7 @@ def test_mol_to_openff(**kwargs):
     inputs = {
         "schema_object": mmol,
         "schema_version": 1,
-        "schema_name": "my_schema",
+        "schema_name": "mmschema",
         "keywords": kwargs,
     }
     return mmic_openff.components.MolToOpenFFComponent.compute(inputs)
