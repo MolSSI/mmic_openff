@@ -36,9 +36,9 @@ class OpenFFMol(ToolkitModel):
     @classmethod
     def from_file(
         cls, filename: str, top_filename: str = None, **kwargs
-    ) -> "OpenMMMol":
+    ) -> "OpenFFMol":
         """
-        Constructs an OpenMMMol object from file(s).
+        Constructs an OpenFFMol object from file(s).
 
         Parameters
         ----------
@@ -50,8 +50,8 @@ class OpenFFMol(ToolkitModel):
             Any additional keywords to pass to the constructor
         Returns
         -------
-        OpenMMMol
-            A constructed OpenMMMol class.
+        OpenFFMol
+            A constructed OpenFFMol class.
         """
 
         if top_filename:
@@ -68,9 +68,9 @@ class OpenFFMol(ToolkitModel):
     @classmethod
     def from_schema(
         cls, data: Molecule, version: Optional[int] = None, **kwargs: Dict[str, Any]
-    ) -> "OpenMMMol":
+    ) -> "OpenFFMol":
         """
-        Constructs an OpenMMMol object from an MMSchema Molecule object.
+        Constructs an OpenFFMol object from an MMSchema Molecule object.
         Parameters
         ----------
         data: Molecule
@@ -81,8 +81,8 @@ class OpenFFMol(ToolkitModel):
             Additional kwargs to pass to the constructors.
         Returns
         -------
-        OpenMMMol
-            A constructed OpenMMMol class.
+        OpenFFMol
+            A constructed OpenFFMol class.
         """
         inputs = {
             "schema_object": data,
@@ -123,7 +123,7 @@ class OpenFFMol(ToolkitModel):
         kwargs["positions_units"] = kwargs.get("positions_units", self.positions_units)
 
         inputs = {"data_object": self.data, "schema_version": version, "kwargs": kwargs}
-        out = OpenMMToMolComponent.compute(inputs)
+        out = OpenFFToMolComponent.compute(inputs)
         if version:
             assert version == out.schema_version
         return out.schema_object
