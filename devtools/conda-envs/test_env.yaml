@@ -11,6 +11,8 @@ dependencies:
   - openmm
   - cython
   - libgcc-ng
+  - ambertools
+  - rdkit
 
     # Pip-only installs
   - pip:
