@@ -9,8 +9,8 @@ from mmic_translator import (
     TransComponent,
     TransInput,
     TransOutput,
-    __version__,
 )
+from mmic_openff.mmic_openff import __version__
 
 provenance_stamp = {
     "creator": "mmic_openff",
@@ -41,7 +41,7 @@ class MolToOpenFFComponent(TransComponent):
 
         if ndim != 3:
             raise NotImplementedError(
-                "mmic_openff supports only 3D molecules."
+                "{creator} supports only 3D molecules.".format(**provenance_stamp)
             )  # need to double check this
 
         mol = OffMolecule()
@@ -57,7 +57,9 @@ class MolToOpenFFComponent(TransComponent):
             atomic_numbers = mmol.atomic_numbers
         else:
             raise NotImplementedError(
-                "mmic_openff supports only atomic/molecular systems. Molecule.atomic_numbers must be defined."  # need to double check this
+                "{creator} supports only atomic/molecular systems. Molecule.atomic_numbers must be defined.".format(
+                    **provenance_stamp
+                )  # need to double check this
             )
 
         if isinstance(mmol.extras, dict):
@@ -98,7 +100,9 @@ class MolToOpenFFComponent(TransComponent):
                 geo_units = getattr(openmm_unit, mmol.geometry_units)
             except AttributeError:
                 AttributeError(
-                    f"Unit {mmol.geometry_units} not supported by mmic_openff."
+                    f"Unit {mmol.geometry_units} not supported by {creator}.".format(
+                        **provenance_stamp
+                    )
                 )
 
             geo = openmm_unit.Quantity(mmol.geometry.reshape(natoms, ndim), geo_units)
