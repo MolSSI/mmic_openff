@@ -3,14 +3,14 @@ channels:
 
   - anaconda
   - conda-forge
-  - omnia
   
 dependencies:
     # Base depends
   - python
   - pip
-  - openff-toolkit
   - openmm
+  - cython
+  - libgcc-ng
 
     # Pip-only installs
   - pip:
@@ -19,9 +19,10 @@ dependencies:
     - pytest
     - pytest-cov
     - qcelemental
+    - git+https://github.com/andrew-abimansour/openff-toolkit.git
     - git+https://github.com/MolSSI/cmselemental.git@v0.2.0
+    - git+https://github.com/parmed/parmed.git
     - git+https://github.com/MolSSI/mmelemental.git
     - git+https://github.com/MolSSI/mmic_translator.git
-    - git+https://github.com/parmed/parmed.git
     - git+https://github.com/MolSSI/mmic_parmed.git
     - git+https://github.com/MolSSI/mm_data.git
