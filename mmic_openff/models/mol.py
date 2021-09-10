@@ -8,8 +8,7 @@ from pathlib import Path
 
 
 # Import OpenFF stuff
-from openff.toolkit import __version__ as off_version
-from openff.toolkit import topology as off_top
+from openff.toolkit import __version__ as off_version, topology as off_top
 
 __all__ = ["OpenFFMol"]
 
