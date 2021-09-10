@@ -1,7 +1,9 @@
 from mmelemental.models import Molecule
 from openff.toolkit.topology.molecule import Molecule as OffMolecule
 from mmic_openff.mmic_openff import units as openff_units
-from simtk import unit as openmm_unit # Importing OpenMM just to pass geometry units ... how stupid
+from simtk import (
+    unit as openmm_unit,
+)  # Importing OpenMM just to pass geometry units ... how stupid
 from typing import List, Tuple, Optional
 from mmic_translator import (
     TransComponent,
@@ -95,7 +97,9 @@ class MolToOpenFFComponent(TransComponent):
             try:
                 geo_units = getattr(openmm_unit, mmol.geometry_units)
             except AttributeError:
-                AttributeError(f"Unit {mmol.geometry_units} not supported by mmic_openff.")
+                AttributeError(
+                    f"Unit {mmol.geometry_units} not supported by mmic_openff."
+                )
 
             geo = openmm_unit.Quantity(mmol.geometry.reshape(natoms, ndim), geo_units)
             mol._add_conformer(
