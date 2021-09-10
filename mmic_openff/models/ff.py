@@ -29,9 +29,10 @@ class OpenFFSmirnoff(ToolkitModel):
     def isvalid(cls, data):
         """Makes sure the Structure object stores atoms."""
         if hasattr(data, "author") and hasattr(data, "date"):
-            if callable(
-                data.parse_smirnoff_from_source
-            ):  # choose a method specific to SMIRNOFF
+            if callable(data._to_smirnoff_data):  # choose a method specific to SMIRNOFF
+                assert data._to_smirnoff_data().get(
+                    "SMIRNOFF"
+                ), "Could not extract SMIRNOFF data from force field object."
                 return data
         raise ValueError("OpenFF Forcefield object is invalid!")
 
