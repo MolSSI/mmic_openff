@@ -1,14 +1,12 @@
 from mmelemental.models import Molecule
 from openff.toolkit.topology.molecule import Molecule as OffMolecule
 from typing import List, Tuple, Optional
-from mmelemental.util.units import convert
 from mmic_translator import (
     TransComponent,
     TransInput,
     TransOutput,
     __version__,
 )
-import numpy
 from simtk import unit  # Importing OpenMM just to pass geometry units ... how stupid
 
 provenance_stamp = {
