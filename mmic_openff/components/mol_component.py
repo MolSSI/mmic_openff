@@ -1,5 +1,7 @@
 from mmelemental.models import Molecule
 from openff.toolkit.topology.molecule import Molecule as OffMolecule
+from mmic_openff.mmic_openff import units as openff_units
+from simtk import unit as openmm_unit # Importing OpenMM just to pass geometry units ... how stupid
 from typing import List, Tuple, Optional
 from mmic_translator import (
     TransComponent,
@@ -7,7 +9,6 @@ from mmic_translator import (
     TransOutput,
     __version__,
 )
-from simtk import unit  # Importing OpenMM just to pass geometry units ... how stupid
 
 provenance_stamp = {
     "creator": "mmic_openff",
@@ -91,10 +92,15 @@ class MolToOpenFFComponent(TransComponent):
                 )
 
         if mmol.geometry is not None:
-            geo = unit.Quantity(
-                mmol.geometry.reshape(natoms, ndim), getattr(unit, mmol.geometry_units)
+            try:
+                geo_units = getattr(openmm_unit, mmol.geometry_units)
+            except AttributeError:
+                AttributeError(f"Unit {mmol.geometry_units} not supported by mmic_openff.")
+
+            geo = openmm_unit.Quantity(mmol.geometry.reshape(natoms, ndim), geo_units)
+            mol._add_conformer(
+                geo.in_units_of(getattr(openmm_unit, openff_units["length"]))
             )
-            mol._add_conformer(geo.in_units_of(unit.angstrom))
 
         success = True
         return success, TransOutput(
