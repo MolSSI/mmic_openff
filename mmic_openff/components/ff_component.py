@@ -1,15 +1,21 @@
 from mmelemental.models import forcefield
-from mmic_translator.models import (
+from mmelemental.util import units
+from mmic_translator import (
+    TransComponent,
     TransInput,
     TransOutput,
 )
-from mmic_translator.components import TransComponent
-from mmic_openff.mmic_openff import units as openmm_units
-from typing import List, Tuple, Optional
+from mmic_openff.mmic_openff import __version__
+from typing import List, Tuple, Optional, Dict, Any
 from collections.abc import Iterable
 from mmelemental.util.units import convert
-from simtk.openmm.app import forcefield as openmm_ff
-import simtk
+from openff.toolkit.typing.engines import smirnoff
+
+provenance_stamp = {
+    "creator": "mmic_openff",
+    "version": __version__,
+    "routine": __name__,
+}
 
 __all__ = ["FFToOpenFFComponent", "OpenFFToFFComponent"]
 
@@ -29,9 +35,7 @@ class FFToOpenFFComponent(TransComponent):
         if isinstance(inputs, dict):
             inputs = self.input()(**inputs)
 
-        empty_atom = parmed.topologyobjects.Atom()
         mmff = inputs.schema_object
-        pff = parmed.structure.Structure()
 
         masses = convert(
             mmff.masses, mmff.masses_units, empty_atom.umass.unit.get_symbol()
@@ -221,6 +225,28 @@ class FFToOpenFFComponent(TransComponent):
                 )
                 pff.dihedral_types.append(dtype)
 
+        smirnoff_data = {
+            "SMIRNOFF": {
+                # Metadata
+                "version": ...,
+                "Author": mmff.author,
+                "Date": mmff.extras.get("date")
+                if isinstance(mmff.extras, dict)
+                else None,
+                "aromaticity_model": ...,
+                # Data fields
+                "Constraints": ...,
+                "Bonds": ...,
+                "Angles": ...,
+                "ProperTorsions": ...,
+                "ImproperTorsions": ...,
+                "vdW": ...,
+                "Electrostatics": ...,
+                "LibraryCharges": ...,
+                "ToolkitAM1BCC": ...,
+            },
+        }
+
         return True, TransOutput(proc_input=inputs, data_object=pff)
 
     def _get_nonbonded(
@@ -264,67 +290,43 @@ class OpenFFToFFComponent(TransComponent):
             inputs = self.input()(**inputs)
 
         ff = inputs.data_object
+        ff_data = ff._to_smirnoff_data().get("SMIRNOFF")
         mm_units = forcefield.ForceField.get_units()
 
-        atoms = ff._atomTypes
-        templates = ff._templates
-        templates_ = [
-            {resname: [atom.name for atom in residue.atoms]}
-            for resname, residue in templates.items()
-        ]
+        vdW_data = ff_data["vdW"]
+        bonds_data = ff_data["Bonds"]
 
-        # names-defs = [(atom.name, symbols[atom.type]) for atom in residue.atoms for residue in templates.items()]
-
-        for gen in ff.getGenerators():
-            if isinstance(gen, simtk.openmm.app.forcefield.NonbondedGenerator):
-                nonbond_ff = gen
-            elif isinstance(gen, simtk.openmm.app.forcefield.HarmonicBondGenerator):
-                bond_ff = gen
-            elif isinstance(gen, simtk.openmm.app.forcefield.HarmonicAngleGenerator):
-                angle_ff = gen
-            elif isinstance(gen, simtk.openmm.app.forcefield.PeriodicTorsionGenerator):
-                dihedral_ff = gen
-            else:
-                raise NotImplementedError
-
-        # Need to map these to potential types
-        lj_units = forcefield.nonbonded.potentials.lenjones.LennardJones.get_units()
-
-        data = [
-            (
-                atom.atomClass,
-                atom.element.symbol,
-                atom.element.atomic_number,
-                atom.mass,
-            )
-            for _, atom in ff._atomTypes.items()
-        ]
-        types, symbols, atomic_numbers, masses = zip(*data)
-        masses_units = atoms["0"].element.mass.unit.get_name()
-        masses = convert(masses, masses_units, mm_units["masses_units"])
-
-        nonbonded, charges = self._get_nonbonded(nonbond_ff)
-        bonds = self._get_bonds(bond_ff)
-        angles = self._get_angles(angle_ff)
-        dihedrals = self._get_dihedrals_proper(dihedral_ff)
+        nonbonded = self._get_nonbonded(vdW_data)
+        # bonds = self._get_bonds(bond_ff)
+        # angles = self._get_angles(angle_ff)
+        # dihedrals = self._get_dihedrals_proper(dihedral_ff)
 
         # charge_groups = None ... should support charge_groups?
         exclusions = None
         inclusions = None
 
         input_dict = {
-            "masses": masses,
-            "charges": charges,
-            "bonds": bonds,
-            "angles": angles,
-            "dihedrals": dihedrals,
+            "name": getattr(ff, "name", None),
+            "version": ff_data["version"],  # not sure abt this
+            "author": ff.author,
+            # "masses": masses,
+            # "charges": charges,
+            # "bonds": bonds,
+            # "angles": angles,
+            # "dihedrals": dihedrals,
             "nonbonded": nonbonded,
             "exclusions": exclusions,
             "inclusions": inclusions,
-            "defs": types,  # or names?
-            "symbols": symbols,
-            # "substructs": residues,
-            "atomic_numbers": atomic_numbers,
+            # "defs": types,  # or names?
+            # "symbols": symbols,
+            # "atomic_numbers": atomic_numbers,
+            "extras": {
+                provenance_stamp["creator"]: {
+                    "date": ff.date,
+                    "aromaticity_model": ff.aromaticity_model,
+                    "ToolkitAM1BCC": ff_data["ToolkitAM1BCC"],
+                },
+            },
         }
 
         ff = forcefield.ForceField(**input_dict)
@@ -337,58 +339,107 @@ class OpenFFToFFComponent(TransComponent):
             schema_name=inputs.schema_name,
         )
 
-    def _get_nonbonded(self, nonbond):
-        lj_scale = nonbond.lj14scale
-        coul_scale = nonbond.coulomb14scale
+    def _get_nonbonded(self, vdW: Dict[str, Any]):
 
-        params = {}
-        # How to deal with lj/coul 1-4 scale? relevant to sigma/epsilon scale in parmed?
+        # Need to read scale12, scale13, ...
+        if vdW["potential"] != "Lennard-Jones-12-6":
+            raise NotImplementedError(
+                "mmic_openff supports only Lennard-Jones-12-6 potential for now."
+            )
 
-        for paramName in nonbond.params.paramNames:
-            params[paramName] = [
-                nonbond.params.paramsForType[str(i)][paramName]
-                for i in range(len(nonbond.params.paramsForType))
-            ]
+        atoms = vdW["Atom"]
+
+        scaling_factor = 2.0 / 2.0 ** (1.0 / 6.0)  # rmin_half = 2^(1/6) sigma / 2
+
+        data = [
+            (
+                atom["smirks"],
+                atom["id"],
+                float(
+                    atom["epsilon"].split("*")[0]
+                ),  # hackish but faster than using pint.Quantity
+                float(atom.get("rmin_half", atom.get("sigma")).split("*")[0])
+                * scaling_factor,  # hackish but faster than using pint.Quantity
+            )
+            for atom in atoms
+        ]
+        defs, ids, epsilon, sigma = zip(*data)
+
+        # Pint raises an UndefinedUnitError if this fails
+        atom = atoms[0]  # does the unit change with every atom?
+        epsilon_units = str(units.Quantity(atom["epsilon"]).u)
+        sigma_units = str(units.Quantity(atom.get("rmin_half", atom.get("sigma"))).u)
 
         lj = forcefield.nonbonded.potentials.LennardJones(
-            sigma=params["sigma"], epsilon=params["epsilon"]
+            sigma=sigma,
+            sigma_units=sigma_units,
+            epsilon=epsilon,
+            epsilon_units=epsilon_units,
         )
 
-        # Need to include sigma_14 and epsilon_14
-        nonbonded = forcefield.nonbonded.NonBonded(params=lj, form="LennardJones")
+        nonbonded = forcefield.nonbonded.NonBonded(
+            params=lj,
+            form="LennardJones",
+            defs=defs,
+            combination_rule=vdW["combining_rules"],
+            version=vdW["version"],
+            extras={
+                provenance_stamp["creator"]: {
+                    "ids": ids,
+                    "method": vdW["method"],
+                    "cutoff": vdW["cutoff"],
+                    "switch_width": vdW["switch_width"],
+                },
+            },
+        )
 
-        # How do we access units?
-        return nonbonded, params["charge"]
+        return nonbonded
 
-    def _get_bonds(self, bonds):
-        ff = bonds.ff
-        bonds_units = forcefield.bonded.bonds.potentials.harmonic.Harmonic.get_units()
+    def _get_bonds(self, bonds: Dict[str, Any]):
+        try:
+            potential = getattr(
+                forcefield.bonded.bonds.potentials, bonds["potential"].capitalize()
+            )
+        except AttributeError:
+            raise AttributeError(
+                f"Potential {bonds['potential']} not supported by MMSchema."
+            )
+
+        bonds_units = potential.get_units()
         bonds_units.update(forcefield.bonded.Bonds.get_units())
 
-        bonds_lengths = bonds.length
-        bonds_k = bonds.k
-        ntypes = len(bonds_k)
-
-        connectivity = [
+        data = [
             (
-                ff._atomTypes[next(iter(bonds.types1[i]))].atomClass,
-                ff._atomTypes[next(iter(bonds.types2[i]))].atomClass,
-                1,
+                bond["smirks"],
+                bond["id"],
+                float(bond["length"].split("*")[0]),
+                float(bond["k"].split("*")[0]),
             )
-            for i in range(ntypes)
+            for bond in bonds["Bond"]
         ]
+        defs, ids, lengths, springs = zip(*data)
 
-        params = forcefield.bonded.bonds.potentials.Harmonic(
-            spring=bonds_k,
-            spring_units=f"{openmm_units['energy']} / {openmm_units['length']}**2",
-        )
+        # Pint raises an UndefinedUnitError if this fails
+        spring_units = str(units.Quantity(bond["length"]).u)
+        lengths_units = str(units.Quantity(bond["k"]).u)
+
+        nbonds = len(lengths)
+        params = potential(spring=springs, spring_units=spring_units)
 
         return forcefield.bonded.Bonds(
+            version=bonds["version"],
             params=params,
             lengths=bonds_lengths,
-            lengths_units=openmm_units["length"],
-            connectivity=connectivity,
-            form="Harmonic",
+            lengths_units=lengths_units,
+            form=potential.__name__,
+            extras={
+                provenance_stamp["creator"]: {
+                    "fractional_bondorder_method": bonds["fractional_bondorder_method"],
+                    "fractional_bondorder_interpolation": bonds[
+                        "fractional_bondorder_interpolation"
+                    ],
+                },
+            },
         )
 
     def _get_angles(self, angles):
