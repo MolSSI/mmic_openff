@@ -22,8 +22,8 @@ except Exception:
 setup(
     # Self-descriptive entries which should always be present
     name="mmic_openff",
-    author="MolSSI",
-    author_email="andrewabimansour@vt.edu",
+    author="Open Force Field Consortium",
+    author_email="info@openforcefield.org",
     description=short_description[0],
     long_description=long_description,
     long_description_content_type="text/markdown",
