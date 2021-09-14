@@ -1,14 +1,17 @@
 from typing import Dict, Any, Optional
-from mmic_translator.models.base import ToolkitModel
+from mmic_translator.models import ToolkitModel
 from mmelemental.models import Molecule
 from cmselemental.types import Array
 import numpy
 from pydantic import Field
 from pathlib import Path
 
-
 # Import OpenFF stuff
 from openff.toolkit import __version__ as off_version, topology as off_top
+
+# OpenFF converter components
+from mmic_openff.components.mol_component import OpenFFToMolComponent
+from mmic_openff.components.mol_component import MolToOpenFFComponent
 
 __all__ = ["OpenFFMol"]
 
@@ -85,7 +88,9 @@ class OpenFFMol(ToolkitModel):
         """
         inputs = {
             "schema_object": data,
+            "schema_name": data.schema_name,
             "schema_version": version or data.schema_version,
+            "keywords": kwargs,
         }
         out = MolToOpenFFComponent.compute(inputs)
         return cls(data=out.data_object, units=out.data_units)
@@ -114,14 +119,16 @@ class OpenFFMol(ToolkitModel):
         Parameters
         ----------
         version: str, optional
-            Schema specification version to comply with e.g. 1.0.1.
+            Schema specification version to comply with.
         **kwargs
             Additional kwargs to pass to the constructor.
         """
-        kwargs["positions"] = kwargs.get("positions", self.positions)
-        kwargs["positions_units"] = kwargs.get("positions_units", self.positions_units)
-
-        inputs = {"data_object": self.data, "schema_version": version, "kwargs": kwargs}
+        inputs = {
+            "data_object": self.data,
+            "schema_name": kwargs.pop("schema_name", Molecule.default_schema_name),
+            "schema_version": version,
+            "keywords": kwargs,
+        }
         out = OpenFFToMolComponent.compute(inputs)
         if version:
             assert version == out.schema_version
