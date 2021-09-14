@@ -24,7 +24,7 @@ dependencies:
     - qcelemental
     - git+https://github.com/openforcefield/openff-forcefields.git
     - git+https://github.com/andrew-abimansour/openff-toolkit.git
-    - git+https://github.com/MolSSI/cmselemental.git@v0.2.0
+    - git+https://github.com/MolSSI/cmselemental.git
     - git+https://github.com/parmed/parmed.git
     - git+https://github.com/MolSSI/mmelemental.git
     - git+https://github.com/MolSSI/mmic_translator.git
