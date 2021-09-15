@@ -17,11 +17,11 @@ dependencies:
     # Pip-only installs
   - pip:
     - xmltodict
-    - mmic>=0.1.0
     - codecov
     - pytest
     - pytest-cov
     - qcelemental
+    - git+https://github.com/MolSSI/mmic.git
     - git+https://github.com/openforcefield/openff-forcefields.git
     - git+https://github.com/andrew-abimansour/openff-toolkit.git
     - git+https://github.com/MolSSI/cmselemental.git@v0.2.0
