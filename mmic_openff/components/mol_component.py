@@ -3,13 +3,14 @@ from openff.toolkit.topology.molecule import Molecule as OffMolecule
 from mmic_openff.mmic_openff import units as openff_units
 from simtk import (
     unit as openmm_unit,
-)  # Importing OpenMM just to pass geometry units ... how stupid
-from typing import List, Tuple, Optional
+)  # OpenMM should not be a requirement
+from typing import List, Tuple, Optional, Set
+from cmselemental.util.decorators import classproperty
 from mmic_translator import (
-    TransComponent,
     TransInput,
     TransOutput,
 )
+from mmic.components import TacticComponent
 from mmic_openff.mmic_openff import __version__
 
 provenance_stamp = {
@@ -21,8 +22,35 @@ provenance_stamp = {
 __all__ = ["MolToOpenFFComponent", "OpenFFToMolComponent"]
 
 
-class MolToOpenFFComponent(TransComponent):
+class MolToOpenFFComponent(TacticComponent):
     """A component for converting MMSchema to OpenFF Molecule."""
+
+    @classmethod
+    def input(cls):
+        return TransInput
+
+    @classmethod
+    def output(cls):
+        return TransOutput
+
+    @classmethod
+    def get_version(cls) -> str:
+        """Finds program, extracts version, returns normalized version string.
+        Returns
+        -------
+        str
+            Return a valid, safe python version string.
+        """
+        raise NotImplementedError
+
+    @classproperty
+    def strategy_comps(cls) -> Set[str]:
+        """Returns the strategy component(s) this (tactic) component belongs to.
+        Returns
+        -------
+        Set[str]
+        """
+        return {"mmic_translator"}
 
     def execute(
         self,
@@ -121,8 +149,35 @@ class MolToOpenFFComponent(TransComponent):
         )
 
 
-class OpenFFToMolComponent(TransComponent):
+class OpenFFToMolComponent(TacticComponent):
     """A component for converting OpenFF to MMSchema Molecule object."""
+
+    @classmethod
+    def input(cls):
+        return TransInput
+
+    @classmethod
+    def output(cls):
+        return TransOutput
+
+    @classmethod
+    def get_version(cls) -> str:
+        """Finds program, extracts version, returns normalized version string.
+        Returns
+        -------
+        str
+            Return a valid, safe python version string.
+        """
+        raise NotImplementedError
+
+    @classproperty
+    def strategy_comps(cls) -> Set[str]:
+        """Returns the strategy component(s) this (tactic) component belongs to.
+        Returns
+        -------
+        Set[str]
+        """
+        return {"mmic_translator"}
 
     def execute(
         self,

@@ -1,15 +1,17 @@
 from mmelemental.models import forcefield
 from mmelemental.util import units
+from mmelemental.util.units import convert
 from mmic_translator import (
-    TransComponent,
     TransInput,
     TransOutput,
 )
 from mmic_openff.mmic_openff import __version__
-from typing import List, Tuple, Optional, Dict, Any
-from collections.abc import Iterable
-from mmelemental.util.units import convert
+from mmic.components import TacticComponent
+from cmselemental.util.decorators import classproperty
 from openff.toolkit.typing.engines import smirnoff
+
+from collections.abc import Iterable
+from typing import List, Tuple, Optional, Dict, Any, Set
 
 provenance_stamp = {
     "creator": "mmic_openff",
@@ -20,8 +22,35 @@ provenance_stamp = {
 __all__ = ["FFToOpenFFComponent", "OpenFFToFFComponent"]
 
 
-class FFToOpenFFComponent(TransComponent):
+class FFToOpenFFComponent(TacticComponent):
     """A component for converting MMSchema to OpenFF ForceField object."""
+
+    @classmethod
+    def input(cls):
+        return TransInput
+
+    @classmethod
+    def output(cls):
+        return TransOutput
+
+    @classmethod
+    def get_version(cls) -> str:
+        """Finds program, extracts version, returns normalized version string.
+        Returns
+        -------
+        str
+            Return a valid, safe python version string.
+        """
+        raise NotImplementedError
+
+    @classproperty
+    def strategy_comps(cls) -> Set[str]:
+        """Returns the strategy component(s) this (tactic) component belongs to.
+        Returns
+        -------
+        Set[str]
+        """
+        return {"mmic_translator"}
 
     def execute(
         self,
@@ -41,13 +70,13 @@ class FFToOpenFFComponent(TransComponent):
             mmff.masses, mmff.masses_units, empty_atom.umass.unit.get_symbol()
         )
 
-        charges = TransComponent.get(mmff, "charges")
+        charges = getattr(mmff, "charges", None)
         charges = convert(
             charges, mmff.charges_units, empty_atom.ucharge.unit.get_symbol()
         )
 
-        atomic_numbers = TransComponent.get(mmff, "atomic_numbers")
-        atom_types = TransComponent.get(mmff, "defs")
+        atomic_numbers = getattr(mmff, "atomic_numbers", None)
+        atom_types = getattr(mmff, "defs", None)
 
         rmin, epsilon = self._get_nonbonded(mmff, empty_atom)
 
@@ -102,7 +131,7 @@ class FFToOpenFFComponent(TransComponent):
                 # polarizable=...,
             )
 
-            residues = TransComponent.get(mmff, "substructs")
+            residues = getattr(mmff, "substructs", None)
 
             if residues:
                 resname, resnum = residues[index]
@@ -114,7 +143,7 @@ class FFToOpenFFComponent(TransComponent):
             pff.add_atom(atom, resname, resnum, chain="", inscode="", segid="")
 
         # Bonds
-        bonds = TransComponent.get(mmff, "bonds")
+        bonds = getattr(mmff, "bonds", None)
         if bonds is not None:
             assert (
                 mmff.bonds.form == "Harmonic"
@@ -146,7 +175,7 @@ class FFToOpenFFComponent(TransComponent):
                 # pff.atoms[i].bond_to(pff.atoms[j])
 
         # Angles
-        angles = TransComponent.get(mmff, "angles")
+        angles = getattr(mmff, "angles", None)
         if angles is not None:
             assert (
                 mmff.angles.form == "Harmonic"
@@ -169,7 +198,7 @@ class FFToOpenFFComponent(TransComponent):
                 pff.angle_types.append(atype)
 
         # Dihedrals
-        dihedrals = TransComponent.get(mmff, "dihedrals")
+        dihedrals = getattr(mmff, "dihedrals", None)
         if dihedrals is not None:
             dihedrals = (
                 dihedrals.pop() if isinstance(dihedrals, list) else dihedrals
@@ -274,8 +303,35 @@ class FFToOpenFFComponent(TransComponent):
         return rmin, epsilon
 
 
-class OpenFFToFFComponent(TransComponent):
+class OpenFFToFFComponent(TacticComponent):
     """A component for converting OpenFF ForceField to MMSchema object."""
+
+    @classmethod
+    def input(cls):
+        return TransInput
+
+    @classmethod
+    def output(cls):
+        return TransOutput
+
+    @classmethod
+    def get_version(cls) -> str:
+        """Finds program, extracts version, returns normalized version string.
+        Returns
+        -------
+        str
+            Return a valid, safe python version string.
+        """
+        raise NotImplementedError
+
+    @classproperty
+    def strategy_comps(cls) -> Set[str]:
+        """Returns the strategy component(s) this (tactic) component belongs to.
+        Returns
+        -------
+        Set[str]
+        """
+        return {"mmic_translator"}
 
     def execute(
         self,
