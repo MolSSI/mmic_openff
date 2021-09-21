@@ -500,7 +500,9 @@ class OpenFFToFFComponent(TacticComponent):
 
     def _get_angles(self, angles):
         ff = angles.ff
-        angles_units = forcefield.bonded.angles.potentials.harmonic.Harmonic.default_units
+        angles_units = (
+            forcefield.bonded.angles.potentials.harmonic.Harmonic.default_units
+        )
         angles_units.update(forcefield.bonded.Angles.default_units)
 
         angles_lengths = angles.angle
