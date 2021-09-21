@@ -23,7 +23,7 @@ def test_mmic_to_ff_from_xml(ff, **kwargs):
         "data_object": ForceField(ff),
         "keywords": kwargs,
         "schema_version": 1,
-        "schema_name": "mmschema",
+        "schema_name": mm.models.ForceField.default_schema_name,
     }
     return mmic_openff.components.OpenFFToFFComponent.compute(inputs)
 
