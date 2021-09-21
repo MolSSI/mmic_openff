@@ -288,7 +288,7 @@ class FFToOpenFFComponent(TacticComponent):
             mmff.nonbonded.form == "LennardJones"
         ), "Only LJ potential supported for now"
 
-        lj_units = forcefield.nonbonded.potentials.lenjones.LennardJones.get_units()
+        lj_units = forcefield.nonbonded.potentials.lenjones.LennardJones.default_units
         scaling_factor = 2 ** (1.0 / 6.0)  # rmin = 2^(1/6) sigma
 
         rmin = mmff.nonbonded.params.sigma * scaling_factor
@@ -347,7 +347,7 @@ class OpenFFToFFComponent(TacticComponent):
 
         ff = inputs.data_object
         ff_data = ff._to_smirnoff_data().get("SMIRNOFF")
-        mm_units = forcefield.ForceField.get_units()
+        mm_units = forcefield.ForceField.default_units
 
         vdW_data = ff_data["vdW"]
         bonds_data = ff_data["Bonds"]
@@ -461,8 +461,8 @@ class OpenFFToFFComponent(TacticComponent):
                 f"Potential {bonds['potential']} not supported by MMSchema."
             )
 
-        bonds_units = potential.get_units()
-        bonds_units.update(forcefield.bonded.Bonds.get_units())
+        bonds_units = potential.default_units
+        bonds_units.update(forcefield.bonded.Bonds.default_units)
 
         data = [
             (
@@ -500,8 +500,8 @@ class OpenFFToFFComponent(TacticComponent):
 
     def _get_angles(self, angles):
         ff = angles.ff
-        angles_units = forcefield.bonded.angles.potentials.harmonic.Harmonic.get_units()
-        angles_units.update(forcefield.bonded.Angles.get_units())
+        angles_units = forcefield.bonded.angles.potentials.harmonic.Harmonic.default_units
+        angles_units.update(forcefield.bonded.Angles.default_units)
 
         angles_lengths = angles.angle
         angles_k = angles.k
@@ -533,9 +533,9 @@ class OpenFFToFFComponent(TacticComponent):
         ff = dihedrals.ff
         proper = dihedrals.proper
         dihedrals_units = (
-            forcefield.bonded.dihedrals.potentials.harmonic.Harmonic.get_units()
+            forcefield.bonded.dihedrals.potentials.harmonic.Harmonic.default_units
         )
-        dihedrals_units.update(forcefield.bonded.Dihedrals.get_units())
+        dihedrals_units.update(forcefield.bonded.Dihedrals.default_units)
 
         connectivity = [
             (
