@@ -114,7 +114,7 @@ class OpenFFMol(ToolkitModel):
 
         self.data.to_file(filename, file_format=dtype, **kwargs)
 
-    def to_schema(self, version: Optional[int] = 0, **kwargs) -> Molecule:
+    def to_schema(self, version: Optional[int], **kwargs) -> Molecule:
         """Converts the molecule to MMSchema molecule.
         Parameters
         ----------
