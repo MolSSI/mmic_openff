@@ -9,7 +9,6 @@ import sys
 import os
 
 import mmelemental as mm
-from mmic_translator.models import schema_input_default
 import mm_data
 from .util import get_files
 
@@ -39,18 +38,18 @@ def test_mmic_to_mmschema(mfile: str, **kwargs):
         "data_object": Molecule.from_file(mfile),
         "keywords": kwargs,
         "schema_version": 1,
-        "schema_name": schema_input_default,
+        "schema_name": mm.models.Molecule.default_schema_name,
     }
 
     return mmic_openff.components.OpenFFToMolComponent.compute(inputs)
 
 
 def test_mol_to_openff(**kwargs):
-    mmol = mm.models.Molecule.from_file(get_data_file_path("molecules/toluene.pdb"))
+    mm_mol = mm.models.Molecule.from_file(get_data_file_path("molecules/toluene.pdb"))
     inputs = {
-        "schema_object": mmol,
-        "schema_version": 1,
-        "schema_name": schema_input_default,
+        "schema_object": mm_mol,
+        "schema_version": mm_mol.schema_version,
+        "schema_name": mm_mol.schema_name,
         "keywords": kwargs,
     }
     return mmic_openff.components.MolToOpenFFComponent.compute(inputs)
@@ -64,10 +63,21 @@ def test_io_methods(mfile: str, **kwargs):
     omol.to_file("tmp.pdb")
     os.remove("tmp.pdb")
 
-    mmol = omol.to_schema()
+    mmol = omol.to_schema(version=1)
     assert isinstance(mmol, mm.models.Molecule)
 
 
-@pytest.mark.parametrize("mfile", molecules)
-def test_lossless_conv(mfile: str, **kwargs):
-    pass
+def test_lossless_conv(**kwargs):
+
+    # Load a molecule with charges
+    mm_mol = mm.models.Molecule.from_file(
+        mm_data.mols["dialanine.pdb"], mm_data.ffs["dialanine.top"]
+    )
+
+    inputs = {
+        "schema_object": mm_mol,
+        "schema_version": mm_mol.schema_version,
+        "schema_name": mm_mol.schema_name,
+        "keywords": kwargs,
+    }
+    return mmic_openff.components.MolToOpenFFComponent.compute(inputs)
