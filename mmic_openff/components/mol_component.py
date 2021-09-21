@@ -20,6 +20,7 @@ provenance_stamp = {
 }
 
 __all__ = ["MolToOpenFFComponent", "OpenFFToMolComponent"]
+_mmschema_max_version = 1
 
 
 class MolToOpenFFComponent(TacticComponent):
@@ -64,8 +65,18 @@ class MolToOpenFFComponent(TacticComponent):
         if isinstance(inputs, dict):
             inputs = self.input()(**inputs)
 
-        mmol = inputs.schema_object
-        ndim = mmol.ndim
+        if inputs.schema_name != Molecule.default_schema_name:
+            raise NotImplementedError(
+                f"Schema {inputs.schema_name} is not yet supported."
+            )
+
+        if inputs.schema_version > _mmschema_max_version:
+            raise NotImplementedError(
+                f"Schema version {inputs.schema_version} not yet supported."
+            )
+
+        mm_mol = inputs.schema_object
+        ndim = mm_mol.ndim
 
         if ndim != 3:
             raise NotImplementedError(
@@ -73,69 +84,94 @@ class MolToOpenFFComponent(TacticComponent):
             )  # need to double check this
 
         mol = OffMolecule()
-        mol.name = mmol.name
-        natoms = len(mmol.symbols)
+        mol.name = mm_mol.name
+        natoms = len(mm_mol.symbols)
 
-        if mmol.atom_labels is not None:
-            atom_labels = mmol.atom_labels
-        else:
-            atom_labels = None
-
-        if mmol.atomic_numbers is not None:
-            atomic_numbers = mmol.atomic_numbers
-        else:
+        if mm_mol.atomic_numbers is None:
             raise NotImplementedError(
                 "{creator} supports only atomic/molecular systems. Molecule.atomic_numbers must be defined.".format(
                     **provenance_stamp
                 )  # need to double check this
             )
 
-        if isinstance(mmol.extras, dict):
-            extras = mmol.extas
+        if isinstance(mm_mol.extras, dict):
+            extras = mm_mol.extas
         else:
             extras = {}
 
-        # not yet supported by MMSchema
-        fm_charges = extras.get("formal_charges", [0 for _ in range(natoms)])
-        aroma = extras.get("is_aromatic", [False for _ in range(natoms)])
+        # For now, get any field not supported by MMSchema from extras
+        off_mol_unsupport = extras.get(provenance_stamp["creator"]) or {}
+        is_aromatic = off_mol_unsupport.get("is_aromatic")
+        stereochem = off_mol_unsupport.get("stereochemistry")
+        frac_bond_order = off_mol_unsupport.get("fractional_bond_order")
 
-        for index, symb in enumerate(mmol.symbols):
+        for index, symb in enumerate(mm_mol.symbols):
             mol.add_atom(
-                atomic_number=mmol.atomic_numbers[index],
-                name=atom_labels[index] if atom_labels is not None else symb,
-                is_aromatic=aroma[index],
-                formal_charge=fm_charges[index],
+                atomic_number=mm_mol.atomic_numbers[index],
+                name=None
+                if mm_mol.formal_charges is None
+                else mm_mol.atom_labels[index],
+                is_aromatic=False,  # not supported by MMSchema
+                formal_charge=0
+                if mm_mol.formal_charges is None
+                else formal_charges[
+                    index
+                ],  # what should the formal charge be if unset?
             )
 
-        if mmol.connectivity is not None:
+        if mm_mol.connectivity is not None:
             for (
-                i,
-                j,
-                order,
-            ) in mmol.connectivity:
+                index,
+                (i, j, order),
+            ) in enumerate(mm_mol.connectivity):
 
                 mol.add_bond(
                     atom1=i,
                     atom2=j,
                     bond_order=order,
-                    is_aromatic=False,
-                    stereochemistry=None,
-                    fractional_bond_order=None,  # Optional argument; Wiberg (or similar) bond order
+                    is_aromatic=False if is_aromatic is None else is_aromatic[index],
+                    stereochemistry=None if stereochem is None else stereochem[index],
+                    fractional_bond_order=None
+                    if frac_bond_order is None
+                    else frac_bond_order[index],
                 )
 
-        if mmol.geometry is not None:
+        if mm_mol.geometry is not None:
             try:
-                geo_units = getattr(openmm_unit, mmol.geometry_units)
+                geo_units = getattr(openmm_unit, mm_mol.geometry_units)
             except AttributeError:
                 AttributeError(
-                    f"Unit {mmol.geometry_units} not supported by {creator}.".format(
+                    f"Unit {mm_mol.geometry_units} not supported by {creator}.".format(
                         **provenance_stamp
                     )
                 )
 
-            geo = openmm_unit.Quantity(mmol.geometry.reshape(natoms, ndim), geo_units)
+            geo = openmm_unit.Quantity(mm_mol.geometry.reshape(natoms, ndim), geo_units)
             mol._add_conformer(
                 geo.in_units_of(getattr(openmm_unit, openff_units["length"]))
+            )
+
+        if mm_mol.partial_charges is not None:
+            partial_charges = mm_mol.partial_charges
+            try:
+                qunit = getattr(openmm_unit, mm_mol.partial_charges_units)
+            except AttributeError:
+                raise AttributeError(
+                    f"OpenMM unit does not support {mm_mol.partial_charges_units}"
+                )
+            partial_charges = openmm_unit.Quantity(value=partial_charges, unit=qunit)
+            mol.partial_charges = partial_charges
+
+        if mm_mol.formal_charges is not None:
+            formal_charges = mm_mol.formal_charges
+            try:
+                qunit = getattr(openmm_unit, mm_mol.formal_charges_units)
+            except AttributeError:
+                raise AttributeError(
+                    f"OpenMM unit does not support {mm_mol.formal_charges_units}"
+                )
+            formal_charges = openmm_unit.Quantity(
+                value=formal_charges, unit=mm_mol.qunit
             )
 
         success = True
