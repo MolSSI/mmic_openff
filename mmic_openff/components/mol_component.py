@@ -11,7 +11,11 @@ from mmic_translator import (
     TransOutput,
 )
 from mmic.components import TacticComponent
-from mmic_openff.mmic_openff import __version__
+from mmic_openff.mmic_openff import (
+    __version__,
+    _supported_versions,
+    _mmschema_max_version,
+)
 
 provenance_stamp = {
     "creator": "mmic_openff",
@@ -20,7 +24,6 @@ provenance_stamp = {
 }
 
 __all__ = ["MolToOpenFFComponent", "OpenFFToMolComponent"]
-_mmschema_max_version = 1
 
 
 class MolToOpenFFComponent(TacticComponent):
@@ -36,13 +39,20 @@ class MolToOpenFFComponent(TacticComponent):
 
     @classmethod
     def get_version(cls) -> str:
-        """Finds program, extracts version, returns normalized version string.
+        """Returns distutils-style version string.
+
+        Examples
+        --------
+        The string ">1.0, !=1.5.1, <2.0" implies any version after 1.0 and before 2.0
+        is compatible, except 1.5.1
+
         Returns
         -------
         str
-            Return a valid, safe python version string.
+            Return a dist-utils valid version string.
+
         """
-        raise NotImplementedError
+        return _supported_versions
 
     @classproperty
     def strategy_comps(cls) -> Set[str]:
@@ -94,24 +104,34 @@ class MolToOpenFFComponent(TacticComponent):
                 )  # need to double check this
             )
 
-        if isinstance(mm_mol.extras, dict):
-            extras = mm_mol.extas
-        else:
-            extras = {}
-
+        extras = getattr(mm_mol, "extras", {}) or {}
         # For now, get any field not supported by MMSchema from extras
-        off_mol_unsupport = extras.get(provenance_stamp["creator"]) or {}
+        off_mol_unsupport = extras.get(provenance_stamp["creator"], {})
         is_aromatic = off_mol_unsupport.get("is_aromatic")
         stereochem = off_mol_unsupport.get("stereochemistry")
         frac_bond_order = off_mol_unsupport.get("fractional_bond_order")
 
+        if mm_mol.formal_charges is not None:
+            formal_charges = mm_mol.formal_charges
+            try:
+                qunit = getattr(openmm_unit, mm_mol.formal_charges_units)
+            except AttributeError:
+                raise AttributeError(
+                    f"OpenMM unit does not support {mm_mol.formal_charges_units}"
+                )
+            formal_charges = openmm_unit.Quantity(
+                value=formal_charges, unit=mm_mol.qunit
+            )
+        else:
+            formal_charges = None
+
         for index, symb in enumerate(mm_mol.symbols):
             mol.add_atom(
-                atomic_number=mm_mol.atomic_numbers[index],
-                name=None
-                if mm_mol.formal_charges is None
-                else mm_mol.atom_labels[index],
-                is_aromatic=False,  # not supported by MMSchema
+                atomic_number=int(
+                    mm_mol.atomic_numbers[index]
+                ),  # must convert numpy.int to int
+                name="" if mm_mol.atom_labels is None else mm_mol.atom_labels[index],
+                is_aromatic=False if is_aromatic is None else is_aromatic[index],
                 formal_charge=0
                 if mm_mol.formal_charges is None
                 else formal_charges[
@@ -129,7 +149,7 @@ class MolToOpenFFComponent(TacticComponent):
                     atom1=i,
                     atom2=j,
                     bond_order=order,
-                    is_aromatic=False if is_aromatic is None else is_aromatic[index],
+                    is_aromatic=False,  # assume always False for now
                     stereochemistry=None if stereochem is None else stereochem[index],
                     fractional_bond_order=None
                     if frac_bond_order is None
@@ -162,18 +182,6 @@ class MolToOpenFFComponent(TacticComponent):
             partial_charges = openmm_unit.Quantity(value=partial_charges, unit=qunit)
             mol.partial_charges = partial_charges
 
-        if mm_mol.formal_charges is not None:
-            formal_charges = mm_mol.formal_charges
-            try:
-                qunit = getattr(openmm_unit, mm_mol.formal_charges_units)
-            except AttributeError:
-                raise AttributeError(
-                    f"OpenMM unit does not support {mm_mol.formal_charges_units}"
-                )
-            formal_charges = openmm_unit.Quantity(
-                value=formal_charges, unit=mm_mol.qunit
-            )
-
         success = True
         return success, TransOutput(
             proc_input=inputs,
@@ -198,13 +206,20 @@ class OpenFFToMolComponent(TacticComponent):
 
     @classmethod
     def get_version(cls) -> str:
-        """Finds program, extracts version, returns normalized version string.
+        """Returns distutils-style version string.
+
+        Examples
+        --------
+        The string ">1.0, !=1.5.1, <2.0" implies any version after 1.0 and before 2.0
+        is compatible, except 1.5.1
+
         Returns
         -------
         str
-            Return a valid, safe python version string.
+            Return a dist-utils valid version string.
+
         """
-        raise NotImplementedError
+        return _supported_versions
 
     @classproperty
     def strategy_comps(cls) -> Set[str]:
@@ -228,38 +243,67 @@ class OpenFFToMolComponent(TacticComponent):
             inputs = self.input()(**inputs)
 
         off_mol = inputs.data_object
+        single_atom = off_mol.atoms[0]
+        input_dict = {}
+
         if off_mol.n_conformers > 1:
             raise NotImplementedError("Multi-conformers not supported.")
 
         if off_mol.n_conformers == 1:
             conformer = off_mol.conformers[0]
-            geo_units = conformer.unit.get_name()
-            geo = conformer._value.flatten()
-        else:
-            geo = None
+            input_dict["geometry"] = conformer._value.flatten()
+            input_dict["geometry_units"] = conformer.unit.get_name()
 
         atomic_data = [
             (atom.name, atom.atomic_number, atom.mass._value) for atom in off_mol.atoms
         ]
         names, atomic_nums, masses = zip(*atomic_data)
+        masses_units = single_atom.mass.unit.get_name()  # assume unit does not change
 
-        masses_units = off_mol.atoms[0].mass.unit.get_name()
+        if single_atom.partial_charge:
+            input_dict["partial_charges"] = [
+                atom.partial_charge._value for atom in off_mol.atoms
+            ]
+            input_dict[
+                "partial_charges_units"
+            ] = single_atom.partial_charge.unit.get_symbol()
+
+        if single_atom.formal_charge:
+            input_dict["formal_charges"] = [
+                atom.formal_charge._value for atom in off_mol.atoms
+            ]
+            input_dict[
+                "formal_charges_units"
+            ] = single_atom.formal_charge.unit.get_symbol()
 
         connectivity = [
             (bond.atom1_index, bond.atom2_index, bond.bond_order)
             for bond in off_mol.bonds
         ]
 
-        input_dict = {
-            "name": off_mol.name,
-            "atomic_numbers": atomic_nums,
-            "atom_labels": names,
-            "geometry": geo,
-            "geometry_units": geo_units,
-            "connectivity": connectivity,
-            "masses": masses,
-            "masses_units": masses_units,
-        }
+        # Deal with data not yet suppported by MMSchema
+        bond_extra = [
+            (bond.stereochemistry, bond.fractional_bond_order) for bond in off_mol.bonds
+        ]
+        bonds_stereo, bonds_frac_order = zip(*bond_extra)
+        is_aromatic = [atom.is_aromatic for atom in off_mol.atoms]
+
+        input_dict.update(
+            {
+                "atomic_numbers": atomic_nums,
+                "atom_labels": names,
+                "connectivity": connectivity,
+                "masses": masses,
+                "masses_units": masses_units,
+                "extras": {
+                    provenance_stamp["creator"]: {
+                        "stereochemistry": bonds_stereo,
+                        "fractional_bond_order": bonds_frac_order,
+                        "is_aromatic": is_aromatic,
+                    }
+                },
+            }
+        )
 
         return True, TransOutput(
             proc_input=inputs,
