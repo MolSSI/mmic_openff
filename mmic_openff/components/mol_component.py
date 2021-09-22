@@ -182,7 +182,7 @@ class MolToOpenFFComponent(TacticComponent):
             partial_charges = openmm_unit.Quantity(value=partial_charges, unit=qunit)
             mol.partial_charges = partial_charges
 
-        success = True
+        success = True # modify this to validate whatever before success/failure is inferred.
         return success, TransOutput(
             proc_input=inputs,
             data_object=mol,
@@ -305,10 +305,11 @@ class OpenFFToMolComponent(TacticComponent):
             }
         )
 
-        return True, TransOutput(
+        success = True # modify this to validate whatever before success/failure is inferred.
+        return success, TransOutput(
             proc_input=inputs,
             schema_object=Molecule(**input_dict),
-            success=True,
+            success=success,
             provenance=provenance_stamp,
             schema_version=inputs.schema_version,
             schema_name=inputs.schema_name,
