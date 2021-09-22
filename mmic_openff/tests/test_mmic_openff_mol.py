@@ -10,7 +10,7 @@ import os
 
 import mmelemental as mm
 import mm_data
-from .util import get_files
+from mmic_openff.tests.util import get_files
 
 from openff.toolkit.topology import Molecule
 from openff.toolkit.utils import get_data_file_path
@@ -37,7 +37,7 @@ def test_mmic_to_mmschema(mfile: str, **kwargs):
     inputs = {
         "data_object": Molecule.from_file(mfile),
         "keywords": kwargs,
-        "schema_version": 1,
+        "schema_version": mmic_openff.mmic_openff._mmschema_max_version,
         "schema_name": mm.models.Molecule.default_schema_name,
     }
 
@@ -63,16 +63,22 @@ def test_io_methods(mfile: str, **kwargs):
     omol.to_file("tmp.pdb")
     os.remove("tmp.pdb")
 
-    mmol = omol.to_schema(version=1)
+    mmol = omol.to_schema(version=mmic_openff.mmic_openff._mmschema_max_version)
     assert isinstance(mmol, mm.models.Molecule)
 
 
 def test_lossless_conv(**kwargs):
 
     # Load a molecule with charges
-    mm_mol = mm.models.Molecule.from_file(
-        mm_data.mols["dialanine.pdb"], mm_data.ffs["dialanine.top"]
-    )
+    off_mol = Molecule(get_data_file_path("molecules/toluene.sdf"))
+    inputs = {
+        "data_object": off_mol,
+        "schema_version": mmic_openff.mmic_openff._mmschema_max_version,
+        "schema_name": mm.models.Molecule.default_schema_name,
+        "keywords": kwargs,
+    }
+    outputs = mmic_openff.components.OpenFFToMolComponent.compute(inputs)
+    mm_mol = outputs.schema_object
 
     inputs = {
         "schema_object": mm_mol,
@@ -80,4 +86,5 @@ def test_lossless_conv(**kwargs):
         "schema_name": mm_mol.schema_name,
         "keywords": kwargs,
     }
-    return mmic_openff.components.MolToOpenFFComponent.compute(inputs)
+    outputs = mmic_openff.components.MolToOpenFFComponent.compute(inputs)
+    assert off_mol == outputs.data_object
