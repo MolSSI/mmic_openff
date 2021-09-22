@@ -13,6 +13,9 @@ __version__ = versions["version"]
 __git_revision__ = versions["full-revisionid"]
 del get_versions, versions
 
+_supported_versions = "==0.10.0"
+_mmschema_max_version = 1
+
 # Incorrect ~ must update
 units = {
     "length": "angstrom",
