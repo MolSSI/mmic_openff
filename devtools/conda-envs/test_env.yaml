@@ -3,11 +3,13 @@ channels:
 
   - anaconda
   - conda-forge
+  - bioconda
   
 dependencies:
     # Base depends
   - python
   - pip
+  - gromacs
   - openmm
   - cython
   - libgcc-ng
