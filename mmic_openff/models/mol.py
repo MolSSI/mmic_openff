@@ -1,9 +1,6 @@
 from typing import Dict, Any, Optional
 from mmic_translator.models import ToolkitModel
 from mmelemental.models import Molecule
-from cmselemental.types import Array
-import numpy
-from pydantic import Field
 from pathlib import Path
 
 # Import OpenFF stuff
@@ -93,7 +90,7 @@ class OpenFFMol(ToolkitModel):
             "keywords": kwargs,
         }
         out = MolToOpenFFComponent.compute(inputs)
-        return cls(data=out.data_object, units=out.data_units)
+        return cls(data=out.data_object, data_units=out.data_units)
 
     def to_file(self, filename: str, dtype: str = None, mode: str = None, **kwargs):
         """Writes the molecule to a file.
