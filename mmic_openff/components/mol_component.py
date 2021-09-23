@@ -37,8 +37,8 @@ class MolToOpenFFComponent(TacticComponent):
     def output(cls):
         return TransOutput
 
-    @classmethod
-    def get_version(cls) -> str:
+    @classproperty
+    def version(cls) -> str:
         """Returns distutils-style version string.
 
         Examples
@@ -206,8 +206,8 @@ class OpenFFToMolComponent(TacticComponent):
     def output(cls):
         return TransOutput
 
-    @classmethod
-    def get_version(cls) -> str:
+    @classproperty
+    def version(cls) -> str:
         """Returns distutils-style version string.
 
         Examples
