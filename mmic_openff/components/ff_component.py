@@ -5,13 +5,18 @@ from mmic_translator import (
     TransInput,
     TransOutput,
 )
-from mmic_openff.mmic_openff import __version__
 from mmic.components import TacticComponent
 from cmselemental.util.decorators import classproperty
 from openff.toolkit.typing.engines import smirnoff
 
 from collections.abc import Iterable
 from typing import List, Tuple, Optional, Dict, Any, Set
+
+from mmic_openff.mmic_openff import (
+    __version__,
+    _supported_versions,
+    _mmschema_max_version,
+)
 
 provenance_stamp = {
     "creator": "mmic_openff",
@@ -33,15 +38,22 @@ class FFToOpenFFComponent(TacticComponent):
     def output(cls):
         return TransOutput
 
-    @classmethod
-    def get_version(cls) -> str:
-        """Finds program, extracts version, returns normalized version string.
+    @classproperty
+    def version(cls) -> str:
+        """Returns distutils-style version string.
+
+        Examples
+        --------
+        The string ">1.0, !=1.5.1, <2.0" implies any version after 1.0 and before 2.0
+        is compatible, except 1.5.1
+
         Returns
         -------
         str
-            Return a valid, safe python version string.
+            Return a dist-utils valid version string.
+
         """
-        raise NotImplementedError
+        return _supported_versions
 
     @classproperty
     def strategy_comps(cls) -> Set[str]:
@@ -314,15 +326,22 @@ class OpenFFToFFComponent(TacticComponent):
     def output(cls):
         return TransOutput
 
-    @classmethod
-    def get_version(cls) -> str:
-        """Finds program, extracts version, returns normalized version string.
+    @classproperty
+    def version(cls) -> str:
+        """Returns distutils-style version string.
+
+        Examples
+        --------
+        The string ">1.0, !=1.5.1, <2.0" implies any version after 1.0 and before 2.0
+        is compatible, except 1.5.1
+
         Returns
         -------
         str
-            Return a valid, safe python version string.
+            Return a dist-utils valid version string.
+
         """
-        raise NotImplementedError
+        return _supported_versions
 
     @classproperty
     def strategy_comps(cls) -> Set[str]:
