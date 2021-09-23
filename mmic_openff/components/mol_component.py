@@ -87,12 +87,6 @@ class MolToOpenFFComponent(TacticComponent):
 
         mm_mol = inputs.schema_object
         ndim = mm_mol.ndim
-
-        if ndim != 3:
-            raise NotImplementedError(
-                "{creator} supports only 3D molecules.".format(**provenance_stamp)
-            )  # need to double check this
-
         mol = OffMolecule()
         mol.name = mm_mol.name
         natoms = len(mm_mol.symbols)
