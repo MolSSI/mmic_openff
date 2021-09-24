@@ -98,7 +98,6 @@ class MolToOpenFFComponent(TacticComponent):
                 )  # need to double check this
             )
 
-
         # For now, get any field not supported by MMSchema from extras
         extras = getattr(mm_mol, "extras", {}) or {}
         off_mol_unsupport = extras.get(provenance_stamp["creator"], {})
@@ -131,9 +130,7 @@ class MolToOpenFFComponent(TacticComponent):
                 is_aromatic=False if is_aromatic is None else is_aromatic[index],
                 formal_charge=0
                 if mm_mol.formal_charges is None
-                else formal_charges[
-                    index
-                ],
+                else formal_charges[index],
             )
 
         # Attach chemical bonds
