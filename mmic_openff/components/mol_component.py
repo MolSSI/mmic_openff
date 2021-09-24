@@ -82,7 +82,7 @@ class MolToOpenFFComponent(TacticComponent):
 
         if inputs.schema_version > _mmschema_max_version:
             raise NotImplementedError(
-                f"Schema version {inputs.schema_version} not yet supported."
+                f"Schema version {inputs.schema_version} is not yet supported."
             )
 
         mm_mol = inputs.schema_object
@@ -98,13 +98,15 @@ class MolToOpenFFComponent(TacticComponent):
                 )  # need to double check this
             )
 
-        extras = getattr(mm_mol, "extras", {}) or {}
+
         # For now, get any field not supported by MMSchema from extras
+        extras = getattr(mm_mol, "extras", {}) or {}
         off_mol_unsupport = extras.get(provenance_stamp["creator"], {})
         is_aromatic = off_mol_unsupport.get("is_aromatic")
         stereochem = off_mol_unsupport.get("stereochemistry")
         frac_bond_order = off_mol_unsupport.get("fractional_bond_order")
 
+        # Get formal charges if they exist. What should the formal charge be if unset?
         if mm_mol.formal_charges is not None:
             formal_charges = mm_mol.formal_charges
             try:
@@ -119,20 +121,22 @@ class MolToOpenFFComponent(TacticComponent):
         else:
             formal_charges = None
 
+        # Create atoms
         for index, symb in enumerate(mm_mol.symbols):
             mol.add_atom(
                 atomic_number=int(
                     mm_mol.atomic_numbers[index]
-                ),  # must convert numpy.int to int
+                ),  # must convert numpy.int to int for rdkit
                 name="" if mm_mol.atom_labels is None else mm_mol.atom_labels[index],
                 is_aromatic=False if is_aromatic is None else is_aromatic[index],
                 formal_charge=0
                 if mm_mol.formal_charges is None
                 else formal_charges[
                     index
-                ],  # what should the formal charge be if unset?
+                ],
             )
 
+        # Attach chemical bonds
         if mm_mol.connectivity is not None:
             for (
                 index,
@@ -150,6 +154,7 @@ class MolToOpenFFComponent(TacticComponent):
                     else frac_bond_order[index],
                 )
 
+        # Handle positions if supplied
         if mm_mol.geometry is not None:
             try:
                 geo_units = getattr(openmm_unit, mm_mol.geometry_units)
@@ -165,6 +170,7 @@ class MolToOpenFFComponent(TacticComponent):
                 geo.in_units_of(getattr(openmm_unit, openff_units["length"]))
             )
 
+        # Get partial charges if they exist.
         if mm_mol.partial_charges is not None:
             partial_charges = mm_mol.partial_charges
             try:
@@ -176,9 +182,7 @@ class MolToOpenFFComponent(TacticComponent):
             partial_charges = openmm_unit.Quantity(value=partial_charges, unit=qunit)
             mol.partial_charges = partial_charges
 
-        success = (
-            True  # modify this to validate whatever before success/failure is inferred.
-        )
+        success = True
         return success, TransOutput(
             proc_input=inputs,
             data_object=mol,
@@ -301,9 +305,7 @@ class OpenFFToMolComponent(TacticComponent):
             }
         )
 
-        success = (
-            True  # modify this to validate whatever before success/failure is inferred.
-        )
+        success = True
         return success, TransOutput(
             proc_input=inputs,
             schema_object=Molecule(**input_dict),
