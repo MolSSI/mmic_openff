@@ -13,12 +13,11 @@ import mm_data
 
 forcefields = [
     "openff-2.0.0.offxml",
-    #    pytest.param(mm_data.ffs["amber99sb.xml"], marks=pytest.mark.skip),
+    pytest.param(mm_data.ffs["amber99sb.xml"], marks=pytest.mark.skip),
 ]
 
 
-#@pytest.mark.parametrize("ff", forcefields)
-@pytest.mark.skip("Skip temporarily.")
+@pytest.mark.parametrize("ff", forcefields)
 def test_mmic_to_ff_from_xml(ff, **kwargs):
     inputs = {
         "data_object": ForceField(ff),
