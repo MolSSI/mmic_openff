@@ -8,18 +8,20 @@ from mmic_translator import (
 from mmic.components import TacticComponent
 from cmselemental.util.decorators import classproperty
 from openff.toolkit.typing.engines import smirnoff
-
+from openff.toolkit.utils import string_to_quantity
+from openff.toolkit.utils.exceptions import SMIRNOFFParseError
 from collections.abc import Iterable
 from typing import List, Tuple, Optional, Dict, Any, Set
 
 from mmic_openff.mmic_openff import (
+    __package__,
     __version__,
     _supported_versions,
     _mmschema_max_version,
 )
 
 provenance_stamp = {
-    "creator": "mmic_openff",
+    "creator": __package__,
     "version": __version__,
     "routine": __name__,
 }
@@ -77,242 +79,50 @@ class FFToOpenFFComponent(TacticComponent):
             inputs = self.input()(**inputs)
 
         mmff = inputs.schema_object
+        off = openff.toolkit.typing.engines.smirnoff.ForceField()
+        extras = getattr(mmff, "extras", {}) or {}
+        unsupported = extras.get(__package__)
 
-        masses = convert(
-            mmff.masses, mmff.masses_units, empty_atom.umass.unit.get_symbol()
-        )
-
-        charges = getattr(mmff, "charges", None)
-        charges = convert(
-            charges, mmff.charges_units, empty_atom.ucharge.unit.get_symbol()
-        )
-
-        atomic_numbers = getattr(mmff, "atomic_numbers", None)
-        atom_types = getattr(mmff, "defs", None)
-
-        rmin, epsilon = self._get_nonbonded(mmff, empty_atom)
-
-        for index, symb in enumerate(mmff.symbols):
-
-            # Will likely lose FF-related info ... but then Molecule is not supposed to store any params specific to FFs
-            if atomic_numbers is not None:
-                atomic_number = atomic_numbers[index]
-            else:
-                atomic_number = None
-
-            if atom_types is not None:
-                atom_type = atom_types[index]
-            else:
-                atom_type = None
-
-            if masses is not None:
-                mass = masses[index]
-            else:
-                mass = None
-
-            if charges is not None:
-                charge = charges[index]
-            else:
-                charge = None
-
-            atom = parmed.topologyobjects.Atom(
-                list=None,
-                atomic_number=atomic_number,
-                name=symb,
-                type=atom_type,
-                mass=mass,
-                charge=charge,
-                nb_idx=0,
-                solvent_radius=0.0,
-                screen=0.0,
-                tree="BLA",
-                join=0.0,
-                irotat=0.0,
-                occupancy=1.0,
-                bfactor=0.0,
-                altloc="",
-                number=-1,
-                rmin=rmin[index],
-                epsilon=epsilon[index],
-                rmin14=None,
-                epsilon14=None,
-                # bonds=..., faster than connecting atoms one by one as done below?
-                # angles=...,
-                # dihedrals=...,
-                # impropers=...,
-                # polarizable=...,
-            )
-
-            residues = getattr(mmff, "substructs", None)
-
-            if residues:
-                resname, resnum = residues[index]
-            else:
-                raise NotImplementedError(
-                    "Residues must be supplied for forcefields based on atom typing."
-                )
-
-            pff.add_atom(atom, resname, resnum, chain="", inscode="", segid="")
-
-        # Bonds
-        bonds = getattr(mmff, "bonds", None)
-        if bonds is not None:
-            assert (
-                mmff.bonds.form == "Harmonic"
-            ), "Only Harmonic potential supported for now"
-
-            spring = convert(
-                bonds.params.spring, bonds.params.spring_units, "kcal/mol/angstroms**2"
-            )
-            req = convert(bonds.lengths, bonds.lengths_units, "angstroms")
-
-            for (
-                bi,
-                (
-                    i,
-                    j,
-                    order,
-                ),
-            ) in enumerate(mmff.bonds.indices):
-                btype = parmed.topologyobjects.BondType(
-                    k=spring[bi], req=req[bi], list=pff.bond_types
-                )
-                pff.bonds.append(
-                    parmed.topologyobjects.Bond(
-                        pff.atoms[i], pff.atoms[j], order=order, type=btype
-                    )
-                )
-                pff.bond_types.append(btype)
-                # both implementations seem to perform almost the same:
-                # pff.atoms[i].bond_to(pff.atoms[j])
-
-        # Angles
-        angles = getattr(mmff, "angles", None)
-        if angles is not None:
-            assert (
-                mmff.angles.form == "Harmonic"
-            ), "Only Harmonic potential supported for now"
-
-            spring = convert(
-                angles.params.spring, angles.params.spring_units, "kcal/mol/radians^2"
-            )
-            angles_eq = convert(angles.angles, angles.angles_units, "degrees")
-
-            for ai, (i, j, k) in enumerate(mmff.angles.indices):
-                atype = parmed.topologyobjects.AngleType(
-                    k=spring[ai], theteq=angles_eq[ai], list=pff.angle_types
-                )
-                pff.angles.append(
-                    parmed.topologyobjects.Angle(
-                        pff.atoms[i], pff.atoms[j], pff.atoms[k], type=atype
-                    )
-                )
-                pff.angle_types.append(atype)
-
-        # Dihedrals
-        dihedrals = getattr(mmff, "dihedrals", None)
-        if dihedrals is not None:
-            dihedrals = (
-                dihedrals.pop() if isinstance(dihedrals, list) else dihedrals
-            )  # For now, keep track of only a single type
-            # Need to change this ASAP! Must take multiple types into account!
-            assert (
-                dihedrals.form == "Charmm" or dihedrals.form == "CharmmMulti"
-            ), "Only Charmm-style potentials supported for now"
-
-            energy = convert(
-                dihedrals.params.energy, dihedrals.params.energy_units, "kcal/mol"
-            )
-            phase = convert(
-                dihedrals.params.phase, dihedrals.params.phase_units, "degrees"
-            )
-            periodicity = dihedrals.params.periodicity
-
-            for di, (i, j, k, l) in enumerate(dihedrals.indices):
-                if isinstance(energy[di], Iterable):
-                    dtype = [
-                        parmed.topologyobjects.DihedralType(
-                            phi_k=energy[di][dj],
-                            per=periodicity[di][dj],
-                            phase=phase[di][dj],
-                            # scee,
-                            # scnb,
-                            list=pff.dihedral_types,
-                        )
-                        for dj in range(len(energy[di]))
-                    ]
-                else:
-                    dtype = parmed.topologyobjects.DihedralType(
-                        phi_k=energy[di],
-                        per=periodicity[di],
-                        phase=phase[di],
-                        # scee
-                        # scnb
-                        list=pff.dihedral_types,
-                    )
-                # assert:
-                # dtype.funct = (
-                #    9  # hackish: assume all dihedrals are proper and charmm-style
-                # )
-                pff.dihedrals.append(
-                    parmed.topologyobjects.Dihedral(
-                        pff.atoms[i],
-                        pff.atoms[j],
-                        pff.atoms[k],
-                        pff.atoms[l],
-                        improper=False,
-                        type=dtype,
-                    )
-                )
-                pff.dihedral_types.append(dtype)
+        # Get library charges
+        libcharges = mmff.charges
 
         smirnoff_data = {
             "SMIRNOFF": {
                 # Metadata
-                "version": ...,
+                "version": mmff.version,
                 "Author": mmff.author,
-                "Date": mmff.extras.get("date")
-                if isinstance(mmff.extras, dict)
-                else None,
-                "aromaticity_model": ...,
-                # Data fields
-                "Constraints": ...,
+                "Date": unsupported.get("date"),
+                "aromaticity_model": unsupported.get("aromaticity_model"),
+                # Data
+                "Constraints": unsupported.get("Constraints"),
                 "Bonds": ...,
                 "Angles": ...,
                 "ProperTorsions": ...,
                 "ImproperTorsions": ...,
                 "vdW": ...,
                 "Electrostatics": ...,
-                "LibraryCharges": ...,
-                "ToolkitAM1BCC": ...,
+                "LibraryCharges": {
+                    "LibraryCharge": charges,
+                    "version": mmff.version,
+                },  # use ff.version for libcharges?
+                "ToolkitAM1BCC": unsupported.get(""),
             },
         }
 
-        return True, TransOutput(proc_input=inputs, data_object=pff)
+        try:
+            off._load_smirnoff_data(smirnoff_data)
+        except SMIRNOFFParseError:
+            raise SMIRNOFFParseError
 
-    def _get_nonbonded(
-        self,
-        mmff: forcefield.ForceField,
-        empty_atom: "parmed.topologyobjects.Atom",
-    ) -> Tuple["numpy.ndarray", "numpy.ndarray"]:
-
-        assert (
-            mmff.nonbonded.form == "LennardJones"
-        ), "Only LJ potential supported for now"
-
-        lj_units = forcefield.nonbonded.potentials.lenjones.LennardJones.default_units
-        scaling_factor = 2 ** (1.0 / 6.0)  # rmin = 2^(1/6) sigma
-
-        rmin = mmff.nonbonded.params.sigma * scaling_factor
-        rmin = convert(rmin, lj_units["sigma_units"], empty_atom.urmin.unit.get_name())
-        # atom.rmin_14 * rmin_14_factor * scaling_factor,
-        epsilon = convert(
-            mmff.nonbonded.params.epsilon,
-            lj_units["epsilon_units"],
-            empty_atom.uepsilon.unit.get_name(),
+        success = True
+        return success, TransOutput(
+            proc_input=inputs,
+            data_object=pff,
+            success=success,
+            provenance=provenance_stamp,
+            schema_name=mmff.schema_name,
+            schema_version=mmff.schema_version,
         )
-        # atom.epsilon_14 * epsilon_14_factor,
-        return rmin, epsilon
 
 
 class OpenFFToFFComponent(TacticComponent):
@@ -370,10 +180,11 @@ class OpenFFToFFComponent(TacticComponent):
 
         vdW_data = ff_data["vdW"]
         bonds_data = ff_data["Bonds"]
+        angles_data = ff_data["Angles"]
 
         nonbonded = self._get_nonbonded(vdW_data)
-        # bonds = self._get_bonds(bond_ff)
-        # angles = self._get_angles(angle_ff)
+        bonds = self._get_bonds(bonds_data)
+        angles = self._get_angles(angles_data)
         # dihedrals = self._get_dihedrals_proper(dihedral_ff)
 
         # charge_groups = None ... should support charge_groups?
@@ -396,7 +207,7 @@ class OpenFFToFFComponent(TacticComponent):
             # "symbols": symbols,
             # "atomic_numbers": atomic_numbers,
             "extras": {
-                provenance_stamp["creator"]: {
+                __package__: {
                     "date": ff.date,
                     "aromaticity_model": ff.aromaticity_model,
                     "ToolkitAM1BCC": ff_data["ToolkitAM1BCC"],
@@ -424,26 +235,27 @@ class OpenFFToFFComponent(TacticComponent):
 
         atoms = vdW["Atom"]
 
-        scaling_factor = 2.0 / 2.0 ** (1.0 / 6.0)  # rmin_half = 2^(1/6) sigma / 2
+        scaling_factor = 2.0 / 2.0 ** (1.0 / 6.0)  # rmin_half = 2^(1/6) * sigma / 2
 
         data = [
             (
                 atom["smirks"],
                 atom["id"],
-                float(
-                    atom["epsilon"].split("*")[0]
-                ),  # hackish but faster than using pint.Quantity
-                float(atom.get("rmin_half", atom.get("sigma")).split("*")[0])
-                * scaling_factor,  # hackish but faster than using pint.Quantity
+                string_to_quantity(atom["epsilon"])._value,
+                string_to_quantity(atom["rmin_half"])._value * scaling_factor
+                if "rmin_half" in atom
+                else string_to_quantity(atom.get("sigma"))._value,
             )
             for atom in atoms
         ]
         defs, ids, epsilon, sigma = zip(*data)
 
         # Pint raises an UndefinedUnitError if this fails
-        atom = atoms[0]  # does the unit change with every atom?
-        epsilon_units = str(units.Quantity(atom["epsilon"]).u)
-        sigma_units = str(units.Quantity(atom.get("rmin_half", atom.get("sigma"))).u)
+        single_atom = atoms[0]  # does the unit change with every atom?
+        epsilon_units = str(units.Quantity(single_atom["epsilon"]).u)
+        sigma_units = str(
+            units.Quantity(single_atom.get("rmin_half", single_atom.get("sigma"))).u
+        )
 
         lj = forcefield.nonbonded.potentials.LennardJones(
             sigma=sigma,
@@ -459,7 +271,7 @@ class OpenFFToFFComponent(TacticComponent):
             combination_rule=vdW["combining_rules"],
             version=vdW["version"],
             extras={
-                provenance_stamp["creator"]: {
+                __package__: {
                     "ids": ids,
                     "method": vdW["method"],
                     "cutoff": vdW["cutoff"],
@@ -487,28 +299,28 @@ class OpenFFToFFComponent(TacticComponent):
             (
                 bond["smirks"],
                 bond["id"],
-                float(bond["length"].split("*")[0]),
-                float(bond["k"].split("*")[0]),
+                string_to_quantity(bond["length"])._value,
+                string_to_quantity(bond["k"])._value,
             )
             for bond in bonds["Bond"]
         ]
         defs, ids, lengths, springs = zip(*data)
 
         # Pint raises an UndefinedUnitError if this fails
-        spring_units = str(units.Quantity(bond["length"]).u)
-        lengths_units = str(units.Quantity(bond["k"]).u)
+        single_bond = bonds["Bond"][0]  # assume the unit remains constant
+        spring_units = str(units.Quantity(single_bond["k"]).u)
+        lengths_units = str(units.Quantity(single_bond["length"]).u)
 
-        nbonds = len(lengths)
         params = potential(spring=springs, spring_units=spring_units)
 
         return forcefield.bonded.Bonds(
             version=bonds["version"],
             params=params,
-            lengths=bonds_lengths,
+            lengths=lengths,
             lengths_units=lengths_units,
             form=potential.__name__,
             extras={
-                provenance_stamp["creator"]: {
+                __package__: {
                     "fractional_bondorder_method": bonds["fractional_bondorder_method"],
                     "fractional_bondorder_interpolation": bonds[
                         "fractional_bondorder_interpolation"
@@ -517,37 +329,43 @@ class OpenFFToFFComponent(TacticComponent):
             },
         )
 
-    def _get_angles(self, angles):
-        ff = angles.ff
-        angles_units = (
-            forcefield.bonded.angles.potentials.harmonic.Harmonic.default_units
-        )
+    def _get_angles(self, angles: Dict[str, Any]):
+        try:
+            potential = getattr(
+                forcefield.bonded.angles.potentials, angles["potential"].capitalize()
+            )
+        except AttributeError:
+            raise AttributeError(
+                f"Potential {angles['potential']} not supported by MMSchema."
+            )
+
+        angles_units = potential.default_units
         angles_units.update(forcefield.bonded.Angles.default_units)
 
-        angles_lengths = angles.angle
-        angles_k = angles.k
-        ntypes = len(angles_k)
-
-        connectivity = [
+        data = [
             (
-                ff._atomTypes[next(iter(angles.types1[i]))].atomClass,
-                ff._atomTypes[next(iter(angles.types2[i]))].atomClass,
-                ff._atomTypes[next(iter(angles.types3[i]))].atomClass,
+                angle["smirks"],
+                angle["id"],
+                string_to_quantity(angle["angle"])._value,
+                string_to_quantity(angle["k"])._value,
             )
-            for i in range(ntypes)
+            for angle in angles["Angle"]
         ]
+        defs, ids, angles_, springs = zip(*data)
 
-        params = forcefield.bonded.angles.potentials.Harmonic(
-            spring=angles_k,
-            spring_units=f"{openmm_units['energy']} / {openmm_units['angle']}**2",
-        )
+        # Pint raises an UndefinedUnitError if this fails
+        single_angle = angles["Angle"][0]  # assume the unit remains constant
+        spring_units = str(units.Quantity(single_angle["k"]).u)
+        angles_units = str(units.Quantity(single_angle["angle"]).u)
+
+        params = potential(spring=springs, spring_units=spring_units)
 
         return forcefield.bonded.Angles(
+            version=angles["version"],
             params=params,
-            angles=angles_lengths,
-            angles_units=openmm_units["angle"],
-            connectivity=connectivity,
-            form="Harmonic",
+            angles=angles_,
+            angles_units=angles_units,
+            form=potential.__name__,
         )
 
     def _get_dihedrals_proper(self, dihedrals):
