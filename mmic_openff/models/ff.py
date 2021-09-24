@@ -47,10 +47,12 @@ class OpenFFSmirnoff(ToolkitModel):
             The forcefield filename to read
         **kwargs
             Any additional keywords to pass to the constructor
+
         Returns
         -------
         OpenFFSmirnoff
             A constructed OpenFFSmirnoff object.
+
         """
         ff = cls.dtype(filename, **kwargs)
 
@@ -82,7 +84,7 @@ class OpenFFSmirnoff(ToolkitModel):
             "keywords": kwargs,
         }
         out = FFToOpenFFComponent.compute(inputs)
-        return cls(data=out.data_object, units=out.data_units)
+        return cls(data=out.data_object, data_units=out.data_units)
 
     def to_file(self, filename: str, dtype: str = None, **kwargs):
         """Writes the forcefield to a file.
