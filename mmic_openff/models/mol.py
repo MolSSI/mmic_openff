@@ -1,6 +1,7 @@
 from typing import Dict, Any, Optional
 from mmic_translator.models import ToolkitModel
 from mmelemental.models import Molecule
+from cmselemental.util.decorators import classproperty
 from pathlib import Path
 
 # Import OpenFF stuff
@@ -16,11 +17,11 @@ __all__ = ["OpenFFMol"]
 class OpenFFMol(ToolkitModel):
     """A model for OpenFF molecule class storing a molecule object."""
 
-    @classmethod
+    @classproperty
     def engine(cls):
         return "openff", off_version
 
-    @classmethod
+    @classproperty
     def dtype(cls):
         """Returns the fundamental molecule object type."""
         return off_top.Molecule
@@ -58,7 +59,7 @@ class OpenFFMol(ToolkitModel):
                 f"{cls} does not support passing topology filenames"
             )
 
-        mol = cls.dtype().from_file(filename, **kwargs)
+        mol = cls.dtype.from_file(filename, **kwargs)
 
         return cls(
             data=mol,
