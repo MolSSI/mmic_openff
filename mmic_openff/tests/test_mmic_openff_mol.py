@@ -58,7 +58,7 @@ def test_mol_to_openff(**kwargs):
 @pytest.mark.parametrize("mfile", molecules)
 def test_io_methods(mfile: str, **kwargs):
     omol = mmic_openff.models.OpenFFMol.from_file(mfile)
-    assert isinstance(omol.data, omol.dtype())
+    assert isinstance(omol.data, omol.dtype)
 
     omol.to_file("tmp.pdb")
     os.remove("tmp.pdb")
