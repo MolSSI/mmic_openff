@@ -1,9 +1,7 @@
 from mmelemental.models import Molecule
 from openff.toolkit.topology.molecule import Molecule as OffMolecule
 from mmic_openff.mmic_openff import units as openff_units
-from openmm import (
-    unit as openmm_unit,
-)  # OpenMM should not be a requirement
+from openmm import unit as openmm_unit
 from typing import List, Tuple, Optional, Set
 from cmselemental.util.decorators import classproperty
 from mmic_translator import (
