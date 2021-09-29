@@ -7,8 +7,9 @@ from mmic_translator import (
 )
 from mmic.components import TacticComponent
 from cmselemental.util.decorators import classproperty
+from openmm import unit as openmm_unit
 from openff.toolkit.typing.engines import smirnoff
-from openff.toolkit.utils import string_to_quantity
+from openff.toolkit.utils import string_to_quantity, quantity_to_string
 from openff.toolkit.utils.exceptions import SMIRNOFFParseError
 from collections.abc import Iterable
 from typing import List, Tuple, Optional, Dict, Any, Set
@@ -26,7 +27,12 @@ provenance_stamp = {
     "routine": __name__,
 }
 
-_potentials_map = {
+_dihedrals_potentials_map = {
+    "k*(1+cos(periodicity*theta-phase))": "CharmmMulti",
+    # need to add all supported potentials in OpenFFTk
+}
+
+_dihedrals_improper_potentials_map = {
     "k*(1+cos(periodicity*theta-phase))": "CharmmMulti",
     # need to add all supported potentials in OpenFFTk
 }
@@ -86,45 +92,64 @@ class FFToOpenFFComponent(TacticComponent):
             inputs = self.input(**inputs)
 
         mmff = inputs.schema_object
-        off = openff.toolkit.typing.engines.smirnoff.ForceField()
+        off = smirnoff.ForceField()
         extras = getattr(mmff, "extras", {}) or {}
         unsupported = extras.get(__package__)
 
+        if unsupported is None:
+            raise NotImplementedError(
+                f"{self.__repr_name__()} currently does not work without additional OFF data: version, constraints, ..."
+            )
+
         # Get library charges
-        libcharges = mmff.charges
+        try:
+            charge_units = getattr(openmm_unit, mmff.charges_units)
+        except AttributeError:
+            raise AttributeError(f"OpenMM unit does not support {mmff.charges_units}.")
+
+        off_charges = [
+            quantity_to_string(openmm_unit.Quantity(charge, unit=charge_units))
+            for charge in mmff.charges
+        ]
+        charges = [
+            {"smirks": mmff.defs[i], "charge1": off_charges[i], "name": mmff.symbols[i]}
+            for i in range(len(off_charges))
+        ]  # need to distinguish name from id
 
         smirnoff_data = {
             "SMIRNOFF": {
                 # Metadata
-                "version": mmff.version,
+                "version": mmff.version,  # what should be the default version be when unspecified?
+                "Date": unsupported.get("Date"),
                 "Author": mmff.author,
-                "Date": unsupported.get("date"),
-                "aromaticity_model": unsupported.get("aromaticity_model"),
                 # Data
+                "aromaticity_model": unsupported.get(
+                    "aromaticity_model", "OEAroModel_MDL"
+                ),  # must generalize this
                 "Constraints": unsupported.get("Constraints"),
-                "Bonds": ...,
-                "Angles": ...,
-                "ProperTorsions": ...,
-                "ImproperTorsions": ...,
-                "vdW": ...,
-                "Electrostatics": ...,
+                # "Bonds": ...,
+                # "Angles": ...,
+                # "ProperTorsions": ...,
+                # "ImproperTorsions": ...,
+                # "vdW": ...,
+                "Electrostatics": unsupported.get("Electrostatics"),
                 "LibraryCharges": {
                     "LibraryCharge": charges,
                     "version": mmff.version,
-                },  # use ff.version for libcharges?
-                "ToolkitAM1BCC": unsupported.get(""),
+                },  # use mmff.version for libcharges?
+                "ToolkitAM1BCC": unsupported.get("ToolkitAM1BCC"),
             },
         }
 
         try:
             off._load_smirnoff_data(smirnoff_data)
+            success = True
         except SMIRNOFFParseError:
-            raise SMIRNOFFParseError
+            success = False
 
-        success = True
         return success, OutputTrans(
             proc_input=inputs,
-            data_object=pff,
+            data_object=off,
             success=success,
             provenance=provenance_stamp,
             schema_name=mmff.schema_name,
@@ -189,9 +214,12 @@ class OpenFFToFFComponent(TacticComponent):
         # VdW/coulomb data
         vdW_data = ff_data["vdW"]
         nonbonded = self._get_nonbonded(vdW_data)
-        elec_data = ff_data["Electrostatics"]
         libdata = [
-            (item["smirks"], string_to_quantity(item["charge1"])._value, item.get("name", item.get("id"))) # how to distinguish between id and name?
+            (
+                item["smirks"],
+                string_to_quantity(item["charge1"])._value,
+                item.get("name", item.get("id")),
+            )  # how to distinguish between id and name?
             for item in ff_data["LibraryCharges"]["LibraryCharge"]
         ]
         defs, charges, names = zip(*libdata)
@@ -205,9 +233,11 @@ class OpenFFToFFComponent(TacticComponent):
         angles = self._get_angles(angles_data)
         dihedrals_data = ff_data["ProperTorsions"]
         dihedrals = self._get_dihedrals_proper(dihedrals_data)
+        dihedrals_improper_data = ff_data["ImproperTorsions"]
+        dihedrals_improper = self._get_dihedrals_improper(dihedrals_improper_data)
 
-        exclusions = None
-        inclusions = None
+        exclusions = None  # need to read these
+        inclusions = None  # not available in OpenFF?
 
         input_dict = {
             "name": getattr(ff, "name", None),
@@ -222,7 +252,7 @@ class OpenFFToFFComponent(TacticComponent):
             "bonds": bonds,
             "angles": angles,
             "dihedrals": dihedrals,
-            # "dihedrals_improper": dihedrals_improper,
+            "dihedrals_improper": dihedrals_improper,
             "nonbonded": nonbonded,
             "exclusions": exclusions,
             "inclusions": inclusions,
@@ -230,8 +260,15 @@ class OpenFFToFFComponent(TacticComponent):
                 __package__: {
                     "date": ff.date,
                     "aromaticity_model": ff.aromaticity_model,
-                    "ToolkitAM1BCC": ff_data["ToolkitAM1BCC"],  # for ambertools
-                    "Electrostatics": elec_data,
+                    "ToolkitAM1BCC": ff_data[
+                        "ToolkitAM1BCC"
+                    ],  # for ambertools -> MMSchema agnostic
+                    "Electrostatics": ff_data[
+                        "Electrostatics"
+                    ],  # sim input parameters -> MMSchema agnostic
+                    "Constraints": ff_data[
+                        "Constraints"
+                    ],  # sim input params -> MMSchema agnostic
                 },
             },
         }
@@ -271,7 +308,7 @@ class OpenFFToFFComponent(TacticComponent):
         ]
         defs, ids, epsilon, sigma = zip(*data)
 
-        # Pint raises an UndefinedUnitError if this fails
+        # Pint raises UndefinedUnitError if this fails
         single_atom = atoms[0]  # does the unit change with every atom?
         epsilon_units = str(units.Quantity(single_atom["epsilon"]).u)
         sigma_units = str(
@@ -326,7 +363,7 @@ class OpenFFToFFComponent(TacticComponent):
         ]
         defs, ids, lengths, springs = zip(*data)
 
-        # Pint raises an UndefinedUnitError if this fails
+        # Pint raises UndefinedUnitError if this fails
         single_bond = bonds["Bond"][0]  # assume the unit remains constant
         spring_units = str(units.Quantity(single_bond["k"]).u)
         lengths_units = str(units.Quantity(single_bond["length"]).u)
@@ -397,7 +434,7 @@ class OpenFFToFFComponent(TacticComponent):
         )
 
     def _get_dihedrals_proper(self, dihedrals: Dict[str, Any]):
-        potential_name = _potentials_map.get(dihedrals["potential"], "")
+        potential_name = _dihedrals_potentials_map.get(dihedrals["potential"], "")
         potential = getattr(
             forcefield.bonded.dihedrals.potentials, potential_name, None
         )
@@ -443,7 +480,7 @@ class OpenFFToFFComponent(TacticComponent):
         ]
         idivf, periodicity, phase, energy = zip(*data)
 
-        # Pint raises an UndefinedUnitError if this fails
+        # Pint raises UndefinedUnitError if this fails
         single_dihedral = dihedrals["Proper"][0]  # assume the unit remains constant
         energy_units = str(units.Quantity(single_dihedral["k1"]).u)
         phase_units = str(units.Quantity(single_dihedral["phase1"]).u)
@@ -471,6 +508,81 @@ class OpenFFToFFComponent(TacticComponent):
                     ],
                     "default_idivf": dihedrals["default_idivf"],
                     "idivf": idivf,  # what does this represent?
+                },
+            },
+        )
+
+    def _get_dihedrals_improper(self, imdihedrals: Dict[str, Any]):
+        potential_name = _dihedrals_improper_potentials_map.get(
+            imdihedrals["potential"], ""
+        )
+        potential = getattr(
+            forcefield.bonded.dihedrals_improper.potentials, potential_name, None
+        )
+        if not potential:
+            raise NotImplementedError(
+                f"Potential {dihedrals['potential']} not supported by MMSchema."
+            )
+
+        # Get units for all physical properties
+        imdihedrals_units = potential.default_units
+        imdihedrals_units.update(forcefield.bonded.DihedralsImproper.default_units)
+
+        # Read specific FF data
+        data = [
+            (
+                imdihedral["smirks"],
+                imdihedral["id"],
+            )
+            for imdihedral in imdihedrals["Improper"]
+        ]
+        defs, ids = zip(*data)
+
+        no_terms = lambda imdih, prop: len(
+            [... for key in imdih.keys() if key.startswith(prop)]
+        )  # hackish?
+        data = [
+            (
+                [
+                    imdihedral[f"periodicity{i+1}"]
+                    for i in range(no_terms(imdihedral, "periodicity"))
+                ],
+                [
+                    string_to_quantity(imdihedral[f"phase{i+1}"])._value
+                    for i in range(no_terms(imdihedral, "phase"))
+                ],
+                [
+                    string_to_quantity(imdihedral[f"k{i+1}"])._value
+                    for i in range(no_terms(imdihedral, "k"))
+                ],
+            )
+            for imdihedral in imdihedrals["Improper"]
+        ]
+        periodicity, phase, energy = zip(*data)
+
+        # Pint raises UndefinedUnitError if this fails
+        single_imdihedral = imdihedrals["Improper"][
+            0
+        ]  # assume the unit remains constant
+        energy_units = str(units.Quantity(single_imdihedral["k1"]).u)
+        phase_units = str(units.Quantity(single_imdihedral["phase1"]).u)
+
+        params = potential(
+            energy=energy,
+            energy_units=energy_units,
+            periodicity=periodicity,
+            phase=phase,
+            phase_units=phase_units,
+        )
+
+        return forcefield.bonded.Dihedrals(
+            version=imdihedrals["version"],
+            params=params,
+            defs=defs,
+            form=potential.__name__,
+            extras={
+                __package__: {
+                    "default_idivf": imdihedrals["default_idivf"],
                 },
             },
         )
