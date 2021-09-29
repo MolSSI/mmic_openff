@@ -7,7 +7,8 @@ import mmic_openff
 import pytest
 import sys
 import os
-
+from pathlib import Path
+import tempfile
 import mmelemental as mm
 import mm_data
 from mmic_openff.tests.util import get_files
@@ -60,8 +61,9 @@ def test_io_methods(mfile: str, **kwargs):
     omol = mmic_openff.models.OpenFFMol.from_file(mfile)
     assert isinstance(omol.data, omol.dtype)
 
-    omol.to_file("tmp.pdb")
-    os.remove("tmp.pdb")
+    file = tempfile.NamedTemporaryFile(suffix=".pdb")
+    omol.to_file(file.name)
+    assert Path(file.name).is_file()
 
     mmol = omol.to_schema(version=mmic_openff.mmic_openff._mmschema_max_version)
     assert isinstance(mmol, mm.models.Molecule)
