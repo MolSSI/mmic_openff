@@ -1,6 +1,7 @@
 from typing import Dict, Any, Optional, Union, List
 from mmic_translator.models import ToolkitModel
 from mmelemental.models import ForceField
+from cmselemental.util.decorators import classproperty
 
 # Import Components
 from mmic_openff.components.ff_component import FFToOpenFFComponent
@@ -16,11 +17,11 @@ __all__ = ["OpenFFSmirnoff"]
 class OpenFFSmirnoff(ToolkitModel):
     """A model for storing a Smirnoff ForceField object in the OpenFF toolkit."""
 
-    @classmethod
+    @classproperty
     def engine(cls):
         return "openff", off_version
 
-    @classmethod
+    @classproperty
     def dtype(cls):
         """Returns the fundamental force field object type."""
         return ForceFieldSmirnoff
