@@ -7,8 +7,8 @@ from openmm import (
 from typing import List, Tuple, Optional, Set
 from cmselemental.util.decorators import classproperty
 from mmic_translator import (
-    TransInput,
-    TransOutput,
+    InputTrans,
+    OutputTrans,
 )
 from mmic.components import TacticComponent
 from mmic.components.base.base_component import ProgramHarness
@@ -33,11 +33,11 @@ class MolToOpenFFComponent(TacticComponent):
 
     @classproperty
     def input(cls):
-        return TransInput
+        return InputTrans
 
     @classproperty
     def output(cls):
-        return TransOutput
+        return OutputTrans
 
     @classproperty
     def version(cls) -> str:
@@ -67,12 +67,12 @@ class MolToOpenFFComponent(TacticComponent):
 
     def execute(
         self,
-        inputs: TransInput,
+        inputs: InputTrans,
         extra_outfiles: Optional[List[str]] = None,
         extra_commands: Optional[List[str]] = None,
         scratch_name: Optional[str] = None,
         timeout: Optional[int] = None,
-    ) -> Tuple[bool, TransOutput]:
+    ) -> Tuple[bool, OutputTrans]:
 
         if isinstance(inputs, dict):
             inputs = self.input(**inputs)
@@ -178,7 +178,7 @@ class MolToOpenFFComponent(TacticComponent):
             mol.partial_charges = partial_charges
 
         success = True
-        return success, TransOutput(
+        return success, OutputTrans(
             proc_input=inputs,
             data_object=mol,
             success=success,
@@ -193,11 +193,11 @@ class OpenFFToMolComponent(TacticComponent):
 
     @classproperty
     def input(cls):
-        return TransInput
+        return InputTrans
 
     @classproperty
     def output(cls):
-        return TransOutput
+        return OutputTrans
 
     @classproperty
     def version(cls) -> str:
@@ -229,12 +229,12 @@ class OpenFFToMolComponent(TacticComponent):
 
     def execute(
         self,
-        inputs: TransInput,
+        inputs: InputTrans,
         extra_outfiles: Optional[List[str]] = None,
         extra_commands: Optional[List[str]] = None,
         scratch_name: Optional[str] = None,
         timeout: Optional[int] = None,
-    ) -> Tuple[bool, TransOutput]:
+    ) -> Tuple[bool, OutputTrans]:
 
         if isinstance(inputs, dict):
             inputs = self.input(**inputs)
@@ -301,7 +301,7 @@ class OpenFFToMolComponent(TacticComponent):
         )
 
         success = True
-        return success, TransOutput(
+        return success, OutputTrans(
             proc_input=inputs,
             schema_object=Molecule(**input_dict),
             success=success,

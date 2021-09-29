@@ -2,8 +2,8 @@ from mmelemental.models import forcefield
 from mmelemental.util import units
 from mmelemental.util.units import convert
 from mmic_translator import (
-    TransInput,
-    TransOutput,
+    InputTrans,
+    OutputTrans,
 )
 from mmic.components import TacticComponent
 from cmselemental.util.decorators import classproperty
@@ -26,23 +26,28 @@ provenance_stamp = {
     "routine": __name__,
 }
 
+_potentials_map = {
+    "k*(1+cos(periodicity*theta-phase))": "CharmmMulti",
+    # need to add all supported potentials in OpenFFTk
+}
+
 __all__ = ["FFToOpenFFComponent", "OpenFFToFFComponent"]
 
 
 class FFToOpenFFComponent(TacticComponent):
     """A component for converting MMSchema to OpenFF ForceField object."""
 
-    @classmethod
+    @classproperty
     def input(cls):
-        return TransInput
+        return InputTrans
 
-    @classmethod
+    @classproperty
     def output(cls):
-        return TransOutput
+        return OutputTrans
 
     @classproperty
     def version(cls) -> str:
-        """Returns distutils-style version string.
+        """Returns distutils-style versions of openff.toolkit this component supports.
 
         Examples
         --------
@@ -60,23 +65,25 @@ class FFToOpenFFComponent(TacticComponent):
     @classproperty
     def strategy_comps(cls) -> Set[str]:
         """Returns the strategy component(s) this (tactic) component belongs to.
+
         Returns
         -------
         Set[str]
+
         """
         return {"mmic_translator"}
 
     def execute(
         self,
-        inputs: TransInput,
+        inputs: InputTrans,
         extra_outfiles: Optional[List[str]] = None,
         extra_commands: Optional[List[str]] = None,
         scratch_name: Optional[str] = None,
         timeout: Optional[int] = None,
-    ) -> Tuple[bool, TransOutput]:
+    ) -> Tuple[bool, OutputTrans]:
 
         if isinstance(inputs, dict):
-            inputs = self.input()(**inputs)
+            inputs = self.input(**inputs)
 
         mmff = inputs.schema_object
         off = openff.toolkit.typing.engines.smirnoff.ForceField()
@@ -115,7 +122,7 @@ class FFToOpenFFComponent(TacticComponent):
             raise SMIRNOFFParseError
 
         success = True
-        return success, TransOutput(
+        return success, OutputTrans(
             proc_input=inputs,
             data_object=pff,
             success=success,
@@ -128,17 +135,17 @@ class FFToOpenFFComponent(TacticComponent):
 class OpenFFToFFComponent(TacticComponent):
     """A component for converting OpenFF ForceField to MMSchema object."""
 
-    @classmethod
+    @classproperty
     def input(cls):
-        return TransInput
+        return InputTrans
 
-    @classmethod
+    @classproperty
     def output(cls):
-        return TransOutput
+        return OutputTrans
 
     @classproperty
     def version(cls) -> str:
-        """Returns distutils-style version string.
+        """Returns distutils-style versions of openff.toolkit this component supports.
 
         Examples
         --------
@@ -156,6 +163,7 @@ class OpenFFToFFComponent(TacticComponent):
     @classproperty
     def strategy_comps(cls) -> Set[str]:
         """Returns the strategy component(s) this (tactic) component belongs to.
+
         Returns
         -------
         Set[str]
@@ -164,60 +172,73 @@ class OpenFFToFFComponent(TacticComponent):
 
     def execute(
         self,
-        inputs: TransInput,
+        inputs: InputTrans,
         extra_outfiles: Optional[List[str]] = None,
         extra_commands: Optional[List[str]] = None,
         scratch_name: Optional[str] = None,
         timeout: Optional[int] = None,
-    ) -> Tuple[bool, TransOutput]:
+    ) -> Tuple[bool, OutputTrans]:
 
         if isinstance(inputs, dict):
-            inputs = self.input()(**inputs)
+            inputs = self.input(**inputs)
 
         ff = inputs.data_object
         ff_data = ff._to_smirnoff_data().get("SMIRNOFF")
         mm_units = forcefield.ForceField.default_units
 
+        # VdW/coulomb data
         vdW_data = ff_data["vdW"]
-        bonds_data = ff_data["Bonds"]
-        angles_data = ff_data["Angles"]
-
         nonbonded = self._get_nonbonded(vdW_data)
-        bonds = self._get_bonds(bonds_data)
-        angles = self._get_angles(angles_data)
-        # dihedrals = self._get_dihedrals_proper(dihedral_ff)
+        elec_data = ff_data["Electrostatics"]
+        libdata = [
+            (item["smirks"], string_to_quantity(item["charge1"])._value, item.get("name", item.get("id"))) # how to distinguish between id and name?
+            for item in ff_data["LibraryCharges"]["LibraryCharge"]
+        ]
+        defs, charges, names = zip(*libdata)
+        single_charge = ff_data["LibraryCharges"]["LibraryCharge"][0]
+        charges_units = str(units.Quantity(single_charge["charge1"]).u)
 
-        # charge_groups = None ... should support charge_groups?
+        # Bonded data
+        bonds_data = ff_data["Bonds"]
+        bonds = self._get_bonds(bonds_data)
+        angles_data = ff_data["Angles"]
+        angles = self._get_angles(angles_data)
+        dihedrals_data = ff_data["ProperTorsions"]
+        dihedrals = self._get_dihedrals_proper(dihedrals_data)
+
         exclusions = None
         inclusions = None
 
         input_dict = {
             "name": getattr(ff, "name", None),
-            "version": ff_data["version"],  # not sure abt this
+            "version": ff_data.get(
+                "version"
+            ),  # not the right version, should be read from the offxml file?
             "author": ff.author,
-            # "masses": masses,
-            # "charges": charges,
-            # "bonds": bonds,
-            # "angles": angles,
-            # "dihedrals": dihedrals,
+            "charges": charges,  # librarycharges
+            "charges_units": charges_units,
+            "defs": defs,
+            "symbols": names,
+            "bonds": bonds,
+            "angles": angles,
+            "dihedrals": dihedrals,
+            # "dihedrals_improper": dihedrals_improper,
             "nonbonded": nonbonded,
             "exclusions": exclusions,
             "inclusions": inclusions,
-            # "defs": types,  # or names?
-            # "symbols": symbols,
-            # "atomic_numbers": atomic_numbers,
             "extras": {
                 __package__: {
                     "date": ff.date,
                     "aromaticity_model": ff.aromaticity_model,
-                    "ToolkitAM1BCC": ff_data["ToolkitAM1BCC"],
+                    "ToolkitAM1BCC": ff_data["ToolkitAM1BCC"],  # for ambertools
+                    "Electrostatics": elec_data,
                 },
             },
         }
 
         ff = forcefield.ForceField(**input_dict)
         success = True
-        return success, TransOutput(
+        return success, OutputTrans(
             proc_input=inputs,
             schema_object=ff,
             success=success,
@@ -283,12 +304,11 @@ class OpenFFToFFComponent(TacticComponent):
         return nonbonded
 
     def _get_bonds(self, bonds: Dict[str, Any]):
-        try:
-            potential = getattr(
-                forcefield.bonded.bonds.potentials, bonds["potential"].capitalize()
-            )
-        except AttributeError:
-            raise AttributeError(
+        potential = getattr(
+            forcefield.bonded.bonds.potentials, bonds["potential"].capitalize(), None
+        )  # MMSchema always uses capitalized potential name
+        if not potential:
+            raise NotImplementedError(
                 f"Potential {bonds['potential']} not supported by MMSchema."
             )
 
@@ -316,6 +336,7 @@ class OpenFFToFFComponent(TacticComponent):
         return forcefield.bonded.Bonds(
             version=bonds["version"],
             params=params,
+            defs=defs,
             lengths=lengths,
             lengths_units=lengths_units,
             form=potential.__name__,
@@ -325,20 +346,21 @@ class OpenFFToFFComponent(TacticComponent):
                     "fractional_bondorder_interpolation": bonds[
                         "fractional_bondorder_interpolation"
                     ],
+                    "id": ids,
                 },
             },
         )
 
     def _get_angles(self, angles: Dict[str, Any]):
-        try:
-            potential = getattr(
-                forcefield.bonded.angles.potentials, angles["potential"].capitalize()
-            )
-        except AttributeError:
-            raise AttributeError(
+        potential = getattr(
+            forcefield.bonded.angles.potentials, angles["potential"].capitalize(), None
+        )  # MMSchema always uses capitalized potential names
+        if not potential:
+            raise NotImplementedError(
                 f"Potential {angles['potential']} not supported by MMSchema."
             )
 
+        # Get units for all physical properties
         angles_units = potential.default_units
         angles_units.update(forcefield.bonded.Angles.default_units)
 
@@ -363,44 +385,92 @@ class OpenFFToFFComponent(TacticComponent):
         return forcefield.bonded.Angles(
             version=angles["version"],
             params=params,
+            defs=defs,
             angles=angles_,
             angles_units=angles_units,
             form=potential.__name__,
+            extras={
+                __package__: {
+                    "id": ids,
+                }
+            },
         )
 
-    def _get_dihedrals_proper(self, dihedrals):
-        ff = dihedrals.ff
-        proper = dihedrals.proper
-        dihedrals_units = (
-            forcefield.bonded.dihedrals.potentials.harmonic.Harmonic.default_units
+    def _get_dihedrals_proper(self, dihedrals: Dict[str, Any]):
+        potential_name = _potentials_map.get(dihedrals["potential"], "")
+        potential = getattr(
+            forcefield.bonded.dihedrals.potentials, potential_name, None
         )
+        if not potential:
+            raise NotImplementedError(
+                f"Potential {dihedrals['potential']} not supported by MMSchema."
+            )
+
+        # Get units for all physical properties
+        dihedrals_units = potential.default_units
         dihedrals_units.update(forcefield.bonded.Dihedrals.default_units)
 
-        connectivity = [
+        # Read specific FF data
+        data = [
             (
-                ff._atomTypes[next(iter(dihedral.types1))].atomClass,
-                ff._atomTypes[next(iter(dihedral.types2))].atomClass,
-                ff._atomTypes[next(iter(dihedral.types3))].atomClass,
-                ff._atomTypes[next(iter(dihedral.types4))].atomClass,
+                dihedral["smirks"],
+                dihedral["id"],
             )
-            for dihedral in proper
+            for dihedral in dihedrals["Proper"]
         ]
+        defs, ids = zip(*data)
 
-        fields = [
-            (dihedral.k, dihedral.periodicity, dihedral.phase) for dihedral in proper
+        no_terms = lambda dih, prop: len(
+            [... for key in dih.keys() if key.startswith(prop)]
+        )  # hackish?
+        data = [
+            (
+                [dihedral[f"idivf{i+1}"] for i in range(no_terms(dihedral, "idivf"))],
+                [
+                    dihedral[f"periodicity{i+1}"]
+                    for i in range(no_terms(dihedral, "periodicity"))
+                ],
+                [
+                    string_to_quantity(dihedral[f"phase{i+1}"])._value
+                    for i in range(no_terms(dihedral, "phase"))
+                ],
+                [
+                    string_to_quantity(dihedral[f"k{i+1}"])._value
+                    for i in range(no_terms(dihedral, "k"))
+                ],
+            )
+            for dihedral in dihedrals["Proper"]
         ]
-        energy, periodicity, phase = zip(*fields)
+        idivf, periodicity, phase, energy = zip(*data)
 
-        params = forcefield.bonded.dihedrals.potentials.CharmmMulti(
+        # Pint raises an UndefinedUnitError if this fails
+        single_dihedral = dihedrals["Proper"][0]  # assume the unit remains constant
+        energy_units = str(units.Quantity(single_dihedral["k1"]).u)
+        phase_units = str(units.Quantity(single_dihedral["phase1"]).u)
+
+        params = potential(
             energy=energy,
-            energy_units=openmm_units["energy"],
+            energy_units=energy_units,
             periodicity=periodicity,
             phase=phase,
-            phase_units=openmm_units["angle"],
+            phase_units=phase_units,
         )
 
         return forcefield.bonded.Dihedrals(
+            version=dihedrals["version"],
             params=params,
-            connectivity=connectivity,
-            form="CharmmMulti",
+            defs=defs,
+            form=potential.__name__,
+            extras={
+                __package__: {
+                    "fractional_bondorder_method": dihedrals[
+                        "fractional_bondorder_method"
+                    ],
+                    "fractional_bondorder_interpolation": dihedrals[
+                        "fractional_bondorder_interpolation"
+                    ],
+                    "default_idivf": dihedrals["default_idivf"],
+                    "idivf": idivf,  # what does this represent?
+                },
+            },
         )
