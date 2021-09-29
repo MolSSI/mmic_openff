@@ -1,7 +1,7 @@
 from mmelemental.models import Molecule
 from openff.toolkit.topology.molecule import Molecule as OffMolecule
 from mmic_openff.mmic_openff import units as openff_units
-from simtk import (
+from openmm import (
     unit as openmm_unit,
 )  # OpenMM should not be a requirement
 from typing import List, Tuple, Optional, Set
@@ -11,14 +11,16 @@ from mmic_translator import (
     TransOutput,
 )
 from mmic.components import TacticComponent
+from mmic.components.base.base_component import ProgramHarness
 from mmic_openff.mmic_openff import (
+    __package__,
     __version__,
     _supported_versions,
     _mmschema_max_version,
 )
 
 provenance_stamp = {
-    "creator": "mmic_openff",
+    "creator": __package__,
     "version": __version__,
     "routine": __name__,
 }
@@ -29,17 +31,17 @@ __all__ = ["MolToOpenFFComponent", "OpenFFToMolComponent"]
 class MolToOpenFFComponent(TacticComponent):
     """A component for converting MMSchema to OpenFF Molecule."""
 
-    @classmethod
+    @classproperty
     def input(cls):
         return TransInput
 
-    @classmethod
+    @classproperty
     def output(cls):
         return TransOutput
 
     @classproperty
     def version(cls) -> str:
-        """Returns distutils-style version string.
+        """Returns distutils-style versions of openff.toolkit this component supports.
 
         Examples
         --------
@@ -73,7 +75,7 @@ class MolToOpenFFComponent(TacticComponent):
     ) -> Tuple[bool, TransOutput]:
 
         if isinstance(inputs, dict):
-            inputs = self.input()(**inputs)
+            inputs = self.input(**inputs)
 
         if inputs.schema_name != Molecule.default_schema_name:
             raise NotImplementedError(
@@ -93,14 +95,12 @@ class MolToOpenFFComponent(TacticComponent):
 
         if mm_mol.atomic_numbers is None:
             raise NotImplementedError(
-                "{creator} supports only atomic/molecular systems. Molecule.atomic_numbers must be defined.".format(
-                    **provenance_stamp
-                )  # need to double check this
+                f"{__package__} supports only atomic/molecular systems. Molecule.atomic_numbers must be defined."  # need to double check this
             )
 
         # For now, get any field not supported by MMSchema from extras
         extras = getattr(mm_mol, "extras", {}) or {}
-        off_mol_unsupport = extras.get(provenance_stamp["creator"], {})
+        off_mol_unsupport = extras.get(__package__, {})
         is_aromatic = off_mol_unsupport.get("is_aromatic")
         stereochem = off_mol_unsupport.get("stereochemistry")
         frac_bond_order = off_mol_unsupport.get("fractional_bond_order")
@@ -157,9 +157,7 @@ class MolToOpenFFComponent(TacticComponent):
                 geo_units = getattr(openmm_unit, mm_mol.geometry_units)
             except AttributeError:
                 AttributeError(
-                    f"Unit {mm_mol.geometry_units} not supported by {creator}.".format(
-                        **provenance_stamp
-                    )
+                    f"Unit {mm_mol.geometry_units} not supported by {__package__}."
                 )
 
             geo = openmm_unit.Quantity(mm_mol.geometry.reshape(natoms, ndim), geo_units)
@@ -193,17 +191,17 @@ class MolToOpenFFComponent(TacticComponent):
 class OpenFFToMolComponent(TacticComponent):
     """A component for converting OpenFF to MMSchema Molecule object."""
 
-    @classmethod
+    @classproperty
     def input(cls):
         return TransInput
 
-    @classmethod
+    @classproperty
     def output(cls):
         return TransOutput
 
     @classproperty
     def version(cls) -> str:
-        """Returns distutils-style version string.
+        """Returns distutils-style versions of openff.toolkit this component supports.
 
         Examples
         --------
@@ -221,9 +219,11 @@ class OpenFFToMolComponent(TacticComponent):
     @classproperty
     def strategy_comps(cls) -> Set[str]:
         """Returns the strategy component(s) this (tactic) component belongs to.
+
         Returns
         -------
         Set[str]
+
         """
         return {"mmic_translator"}
 
@@ -237,7 +237,7 @@ class OpenFFToMolComponent(TacticComponent):
     ) -> Tuple[bool, TransOutput]:
 
         if isinstance(inputs, dict):
-            inputs = self.input()(**inputs)
+            inputs = self.input(**inputs)
 
         off_mol = inputs.data_object
         single_atom = off_mol.atoms[0]
@@ -286,20 +286,18 @@ class OpenFFToMolComponent(TacticComponent):
         is_aromatic = [atom.is_aromatic for atom in off_mol.atoms]
 
         input_dict.update(
-            {
-                "atomic_numbers": atomic_nums,
-                "atom_labels": names,
-                "connectivity": connectivity,
-                "masses": masses,
-                "masses_units": masses_units,
-                "extras": {
-                    provenance_stamp["creator"]: {
-                        "stereochemistry": bonds_stereo,
-                        "fractional_bond_order": bonds_frac_order,
-                        "is_aromatic": is_aromatic,
-                    }
-                },
-            }
+            atomic_numbers=atomic_nums,
+            atom_labels=names,
+            connectivity=connectivity,
+            masses=masses,
+            masses_units=masses_units,
+            extras={
+                __package__: {
+                    "stereochemistry": bonds_stereo,
+                    "fractional_bond_order": bonds_frac_order,
+                    "is_aromatic": is_aromatic,
+                }
+            },
         )
 
         success = True
