@@ -12,6 +12,7 @@ import mmelemental as mm
 import mm_data
 
 forcefields = [
+    "openff-1.2.0.offxml",
     "openff-2.0.0.offxml",
     pytest.param(mm_data.ffs["amber99sb.xml"], marks=pytest.mark.skip),
 ]
