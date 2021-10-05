@@ -1,6 +1,6 @@
 [//]: # (Badges)
 [![GitHub Actions Build Status](https://github.com/MolSSI/mmic_openff/workflows/CI/badge.svg)](https://github.com/MolSSI/mmic_openff/actions?query=workflow%3ACI)
-[![codecov](https://codecov.io/gh/MolSSI/mmic_openff/branch/master/graph/badge.svg)](https://codecov.io/gh/MolSSI/mmic_openff/branch/master)
+[![codecov](https://codecov.io/gh/MolSSI/mmic_openff/branch/main/graph/badge.svg)](https://codecov.io/gh/MolSSI/mmic_openff/branch/main)
 [![Language grade: Python](https://img.shields.io/lgtm/grade/python/g/MolSSI/mmic_openff.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/MolSSI/mmic_openff/context:python)
 
 OpenFF translator for MMSchema
